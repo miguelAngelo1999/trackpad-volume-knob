@@ -73,14 +73,51 @@ public final class GestureInterpreter: GestureEngineDelegate {
             let increasing = gestureNetDegrees >= 0
             volumeController.showHUD(increasing: increasing)
         case .brightness:
-            break   // brightness OSD is shown per-adjustment, not at end
+            break
         }
 
-        // Fling uses the locked target so lifting Control mid-gesture
-        // doesn't switch the coast back to volume.
         let target = lockedTarget
         flingEngine.startFling { [weak self] delta in
             self?.applyDelta(delta, target: target, showHUD: false)
+        }
+    }
+
+    // MARK: - Pinch delegate methods
+
+    public func gestureEngineDidBeginPinch(_ engine: GestureEngine) {
+        hapticEngine.reset()
+    }
+
+    public func gestureEngineDidEndPinch(_ engine: GestureEngine) {
+        // no fling for pinch — brightness adjustments don't coast
+    }
+
+    public func gestureEngine(_ engine: GestureEngine, didReceivePinch event: PinchEvent) {
+        guard settings.pinchEnabled else { return }
+
+        // magnification: positive = spread (increase), negative = pinch (decrease)
+        // Scale: ~1.0 magnification = full range sweep
+        let scalar = event.magnification * settings.sensitivity * 20.0
+        let finalDelta = Float(scalar)
+        guard abs(finalDelta) > 0.0001 else { return }
+
+        let target: GestureTarget = settings.pinchTarget == .brightness ? .brightness : .volume
+
+        if settings.debugLogging {
+            Logger.debug("Interpreter: pinch target=\(target) Δ=\(String(format:"%.5f", finalDelta))")
+        }
+
+        switch target {
+        case .volume:
+            volumeController.adjustVolume(by: finalDelta)
+            hapticEngine.feedback(value: volumeController.currentVolume,
+                                  delta: finalDelta, target: .volume,
+                                  level: settings.hapticLevel)
+        case .brightness:
+            brightnessController.adjustBrightness(by: finalDelta)
+            hapticEngine.feedback(value: brightnessController.currentBrightness(),
+                                  delta: finalDelta, target: .brightness,
+                                  level: settings.hapticLevel)
         }
     }
 

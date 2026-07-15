@@ -36,6 +36,19 @@ public struct RotationEvent: Sendable {
     }
 }
 
+/// A raw pinch/magnify sample delivered by the OS.
+public struct PinchEvent: Sendable {
+    public let magnification: Double   // positive = spread, negative = pinch
+    public let timestamp: TimeInterval
+    public let phase: NSEvent.Phase
+
+    public init(magnification: Double, timestamp: TimeInterval, phase: NSEvent.Phase) {
+        self.magnification = magnification
+        self.timestamp = timestamp
+        self.phase = phase
+    }
+}
+
 // MARK: - Protocol
 
 @MainActor
@@ -43,6 +56,10 @@ public protocol GestureEngineDelegate: AnyObject {
     func gestureEngine(_ engine: GestureEngine, didReceive event: RotationEvent)
     func gestureEngineDidBeginGesture(_ engine: GestureEngine)
     func gestureEngineDidEndGesture(_ engine: GestureEngine)
+
+    func gestureEngine(_ engine: GestureEngine, didReceivePinch event: PinchEvent)
+    func gestureEngineDidBeginPinch(_ engine: GestureEngine)
+    func gestureEngineDidEndPinch(_ engine: GestureEngine)
 }
 
 // MARK: - GestureEngine
@@ -73,7 +90,7 @@ public final class GestureEngine {
             return
         }
 
-        let mask: NSEvent.EventTypeMask = [.rotate]
+        let mask: NSEvent.EventTypeMask = [.rotate, .magnify]
 
         // Global monitor: fires when OTHER apps are frontmost (the common case).
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] event in
@@ -133,10 +150,13 @@ public final class GestureEngine {
                     return Unmanaged.passRetained(cgEvent)
                 }
                 let engine = Unmanaged<GestureEngine>.fromOpaque(userInfo).takeUnretainedValue()
-                // Wrap in NSEvent to read .rotation
-                if let nsEvent = NSEvent(cgEvent: cgEvent),
-                   nsEvent.type == .rotate {
-                    Task { @MainActor in engine.handle(nsEvent) }
+                // Wrap in NSEvent to read .rotation / .magnification
+                if let nsEvent = NSEvent(cgEvent: cgEvent) {
+                    if nsEvent.type == .rotate {
+                        Task { @MainActor in engine.handle(nsEvent) }
+                    } else if nsEvent.type == .magnify {
+                        Task { @MainActor in engine.handlePinch(nsEvent) }
+                    }
                 }
                 return Unmanaged.passRetained(cgEvent)
             },
@@ -175,6 +195,12 @@ public final class GestureEngine {
             guard isFallbackModifierDown() else { return }
         }
 
+        // Route by event type
+        if event.type == .magnify {
+            handlePinch(event)
+            return
+        }
+
         let degrees = Double(event.rotation)
 
         switch event.phase {
@@ -191,6 +217,35 @@ public final class GestureEngine {
 
         delegate?.gestureEngine(self, didReceive: RotationEvent(
             degrees: degrees,
+            timestamp: event.timestamp,
+            phase: event.phase
+        ))
+    }
+
+    private func handlePinch(_ event: NSEvent) {
+        guard settings.pinchEnabled else { return }
+
+        // Exclusion list
+        if let frontmost = NSWorkspace.shared.frontmostApplication,
+           let bid = frontmost.bundleIdentifier,
+           settings.isExcluded(bid) { return }
+
+        let mag = Double(event.magnification)
+
+        switch event.phase {
+        case .began:   delegate?.gestureEngineDidBeginPinch(self)
+        case .ended, .cancelled: delegate?.gestureEngineDidEndPinch(self)
+        default: break
+        }
+
+        guard mag != 0 else { return }
+
+        if settings.debugLogging {
+            Logger.debug("GestureEngine: pinch \(String(format: "%.4f", mag)) phase=\(event.phase.rawValue)")
+        }
+
+        delegate?.gestureEngine(self, didReceivePinch: PinchEvent(
+            magnification: mag,
             timestamp: event.timestamp,
             phase: event.phase
         ))

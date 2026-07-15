@@ -17,10 +17,10 @@
     <string>com.trackpadvolumeknob</string>
 
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>2</string>
 
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>1.1.0</string>
 
     <key>CFBundleExecutable</key>
     <string>TrackpadVolumeKnob</string>
@@ -55,6 +55,9 @@
     <!-- Sparkle auto-updater configuration -->
     <key>SUFeedURL</key>
     <string>https://raw.githubusercontent.com/miguelAngelo1999/trackpad-volume-knob/main/appcast.xml</string>
+
+    <key>SUPublicEDKey</key>
+    <string>no+h6Cj0mErZMmde6ysSHZo6gZnADKWyrvRgUFSe/q0=</string>
 
     <!-- Enable automatic update checks (user can toggle in Settings) -->
     <key>SUEnableAutomaticChecks</key>

@@ -20,6 +20,8 @@ private enum DefaultsKey {
     static let excludedBundleIDs   = "excludedBundleIDs"
     static let hapticLevel         = "hapticLevel"
     static let autoCheckUpdates    = "autoCheckUpdates"
+    static let pinchEnabled        = "pinchEnabled"
+    static let pinchTarget         = "pinchTarget"
 }
 
 // MARK: - Known apps that use the rotation gesture natively.
@@ -59,6 +61,13 @@ public enum HapticLevel: String, CaseIterable, Identifiable {
     case light  = "Light"
     case medium = "Medium"
     case strong = "Strong"
+    public var id: String { rawValue }
+}
+
+/// What the pinch gesture controls.
+public enum PinchTarget: String, CaseIterable, Identifiable {
+    case brightness = "Brightness"
+    case volume     = "Volume"
     public var id: String { rawValue }
 }
 
@@ -163,6 +172,16 @@ public final class AppSettings: ObservableObject {
         didSet { defaults.set(autoCheckUpdates, forKey: DefaultsKey.autoCheckUpdates) }
     }
 
+    /// Enable two-finger pinch to control brightness (or volume).
+    @Published public var pinchEnabled: Bool {
+        didSet { defaults.set(pinchEnabled, forKey: DefaultsKey.pinchEnabled) }
+    }
+
+    /// What pinch controls (default: brightness).
+    @Published public var pinchTarget: PinchTarget {
+        didSet { defaults.set(pinchTarget.rawValue, forKey: DefaultsKey.pinchTarget) }
+    }
+
     /// Bundle IDs of apps where rotation gestures pass through untouched.
     /// Persisted as a JSON-encoded array so add/remove is trivial.
     @Published public var excludedBundleIDs: [String] {
@@ -206,7 +225,9 @@ public final class AppSettings: ObservableObject {
             DefaultsKey.gestureTarget:      GestureTarget.volume.rawValue,
             DefaultsKey.brightnessModifier: BrightnessModifier.none.rawValue,
             DefaultsKey.hapticLevel:        HapticLevel.medium.rawValue,
-            DefaultsKey.autoCheckUpdates:   true
+            DefaultsKey.autoCheckUpdates:   true,
+            DefaultsKey.pinchEnabled:       true,
+            DefaultsKey.pinchTarget:        PinchTarget.brightness.rawValue
         ])
 
         sensitivity       = defaults.double(forKey: DefaultsKey.sensitivity)
@@ -234,6 +255,10 @@ public final class AppSettings: ObservableObject {
             rawValue: defaults.string(forKey: DefaultsKey.hapticLevel) ?? ""
         ) ?? .medium
         autoCheckUpdates = defaults.bool(forKey: DefaultsKey.autoCheckUpdates)
+        pinchEnabled = defaults.bool(forKey: DefaultsKey.pinchEnabled)
+        pinchTarget  = PinchTarget(
+            rawValue: defaults.string(forKey: DefaultsKey.pinchTarget) ?? ""
+        ) ?? .brightness
 
         // Load excluded bundle IDs — fall back to the built-in preset on first launch.
         if let data = defaults.data(forKey: DefaultsKey.excludedBundleIDs),

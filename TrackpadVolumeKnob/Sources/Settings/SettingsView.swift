@@ -186,6 +186,23 @@ private struct GesturesTab: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            Section("Pinch Gesture") {
+                Toggle("Enable pinch gesture", isOn: $settings.pinchEnabled)
+
+                if settings.pinchEnabled {
+                    Picker("Pinch controls", selection: $settings.pinchTarget) {
+                        ForEach(PinchTarget.allCases) { t in
+                            Text(t.rawValue).tag(t)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text("Spread to increase \(settings.pinchTarget.rawValue.lowercased()), pinch to decrease.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .formStyle(.grouped)
     }

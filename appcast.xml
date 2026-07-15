@@ -6,10 +6,32 @@
     <description>Most recent updates to TrackpadVolumeKnob</description>
     <language>en</language>
 
-    <!-- Template: copy this <item> block for each release, newest first -->
+    <item>
+      <title>Version 1.1.0</title>
+      <pubDate>Tue, 15 Jul 2026 12:00:00 +0000</pubDate>
+      <sparkle:version>2</sparkle:version>
+      <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>v1.1.0 — Pinch to Brightness</h2>
+        <ul>
+          <li><strong>Pinch gesture</strong> — spread to increase brightness, pinch to decrease (built-in + external displays via DDC)</li>
+          <li><strong>Sparkle auto-updater</strong> — Check for Updates in the menu bar, daily background checks</li>
+          <li>Pinch on/off toggle and target (brightness or volume) in Settings → Gestures</li>
+          <li>Settings → General: auto-update toggle</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/miguelAngelo1999/trackpad-volume-knob/releases/download/v1.1.0/TrackpadVolumeKnob-1.1.0.zip"
+        length="2954123"
+        type="application/octet-stream"
+        sparkle:edSignature="SIGN_BY_RUNNING_scripts/sign_release.sh_1.1.0"
+      />
+    </item>
+
     <item>
       <title>Version 1.0.0</title>
-      <pubDate>Tue, 15 Jul 2026 12:00:00 +0000</pubDate>
+      <pubDate>Mon, 14 Jul 2026 12:00:00 +0000</pubDate>
       <sparkle:version>1</sparkle:version>
       <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
@@ -24,7 +46,6 @@
           <li>External display brightness via DDC</li>
         </ul>
       ]]></description>
-      <!-- Replace URL and length after building the release DMG/ZIP -->
       <enclosure
         url="https://github.com/miguelAngelo1999/trackpad-volume-knob/releases/download/v1.0.0/TrackpadVolumeKnob-1.0.0.zip"
         length="0"
