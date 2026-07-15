@@ -160,6 +160,16 @@ public final class GestureEngine {
     // MARK: - Event handling
 
     private func handle(_ event: NSEvent) {
+        // Exclusion list: pass through to apps that use rotation natively.
+        if let frontmost = NSWorkspace.shared.frontmostApplication,
+           let bid = frontmost.bundleIdentifier,
+           settings.isExcluded(bid) {
+            if settings.debugLogging {
+                Logger.debug("GestureEngine: skipping — \(bid) is excluded")
+            }
+            return
+        }
+
         // Fallback mode: only act while modifier is held
         if settings.fallbackMode {
             guard isFallbackModifierDown() else { return }

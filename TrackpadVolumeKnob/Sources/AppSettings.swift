@@ -17,7 +17,35 @@ private enum DefaultsKey {
     static let degreesPerStep      = "degreesPerStep"
     static let gestureTarget       = "gestureTarget"
     static let brightnessModifier  = "brightnessModifier"
+    static let excludedBundleIDs   = "excludedBundleIDs"
 }
+
+// MARK: - Known apps that use the rotation gesture natively.
+// Rotation events are passed through to these apps unchanged.
+public let defaultExcludedBundleIDs: [String] = [
+    "com.apple.Maps",                    // Maps — rotate to turn the map
+    "com.apple.Preview",                 // Preview — rotate images/PDFs
+    "com.apple.Photos",                  // Photos — rotate in editor
+    "com.apple.iPhoto",                  // iPhoto (legacy)
+    "com.apple.Aperture",                // Aperture (legacy)
+    "com.sketchup.SketchUp",             // SketchUp — rotate 3-D models
+    "com.autodesk.autocad",              // AutoCAD
+    "com.adobe.Photoshop",               // Photoshop — rotate canvas
+    "com.adobe.Illustrator",             // Illustrator — rotate canvas
+    "com.adobe.AfterEffects",            // After Effects
+    "com.adobe.LightroomClassicCC7",     // Lightroom Classic
+    "com.adobe.lightroom",               // Lightroom (new)
+    "com.readdle.PDFExpert-Mac",         // PDF Expert
+    "com.pdfpen.pdfpen",                 // PDFpen
+    "com.smileonmymac.PDFpenPro",        // PDFpenPro
+    "com.pixelmator.pro",                // Pixelmator Pro
+    "com.pixelmator.pixelmator",         // Pixelmator
+    "com.bohemiancoding.sketch3",        // Sketch
+    "com.figma.Desktop",                 // Figma
+    "com.google.Chrome",                 // Chrome (maps/web apps)
+    "org.mozilla.firefox",               // Firefox
+    "com.apple.Safari",                  // Safari (web maps)
+]
 
 public enum AppearanceMode: String, CaseIterable, Identifiable {
     case system = "System"
@@ -111,6 +139,31 @@ public final class AppSettings: ObservableObject {
         didSet { defaults.set(brightnessModifier.rawValue, forKey: DefaultsKey.brightnessModifier) }
     }
 
+    /// Bundle IDs of apps where rotation gestures pass through untouched.
+    /// Persisted as a JSON-encoded array so add/remove is trivial.
+    @Published public var excludedBundleIDs: [String] {
+        didSet { saveExcludedBundleIDs() }
+    }
+
+    /// Returns true if the given bundle ID should be excluded from gesture handling.
+    public func isExcluded(_ bundleID: String) -> Bool {
+        excludedBundleIDs.contains(bundleID)
+    }
+
+    public func addExclusion(_ bundleID: String) {
+        let id = bundleID.trimmingCharacters(in: .whitespaces)
+        guard !id.isEmpty, !excludedBundleIDs.contains(id) else { return }
+        excludedBundleIDs.append(id)
+    }
+
+    public func removeExclusion(_ bundleID: String) {
+        excludedBundleIDs.removeAll { $0 == bundleID }
+    }
+
+    public func resetExclusionsToDefaults() {
+        excludedBundleIDs = defaultExcludedBundleIDs
+    }
+
     private let defaults = UserDefaults.standard
 
     private init() {
@@ -151,6 +204,20 @@ public final class AppSettings: ObservableObject {
         brightnessModifier = BrightnessModifier(
             rawValue: defaults.string(forKey: DefaultsKey.brightnessModifier) ?? ""
         ) ?? .none
+
+        // Load excluded bundle IDs — fall back to the built-in preset on first launch.
+        if let data = defaults.data(forKey: DefaultsKey.excludedBundleIDs),
+           let saved = try? JSONDecoder().decode([String].self, from: data) {
+            excludedBundleIDs = saved
+        } else {
+            excludedBundleIDs = defaultExcludedBundleIDs
+        }
+    }
+
+    private func saveExcludedBundleIDs() {
+        if let data = try? JSONEncoder().encode(excludedBundleIDs) {
+            defaults.set(data, forKey: DefaultsKey.excludedBundleIDs)
+        }
     }
 
     private func applyAppearance() {

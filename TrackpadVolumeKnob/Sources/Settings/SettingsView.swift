@@ -17,6 +17,9 @@ public struct SettingsView: View {
             AudioTab()
                 .tabItem { Label("Audio", systemImage: "speaker.wave.2") }
 
+            AppsTab(settings: settings)
+                .tabItem { Label("Apps", systemImage: "square.stack") }
+
             AppearanceTab(settings: settings)
                 .tabItem { Label("Appearance", systemImage: "paintbrush") }
         }
@@ -202,6 +205,186 @@ private struct VolumeTestView: View {
                     controller.setVolume(Float(newValue))
                 }
         }
+    }
+}
+
+// MARK: - Apps Tab
+
+private struct AppsTab: View {
+    @ObservedObject var settings: AppSettings
+    @State private var newBundleID: String = ""
+    @State private var showingAddField = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header explanation
+            HStack(spacing: 10) {
+                Image(systemName: "hand.raised.slash.fill")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Pass-through Apps")
+                        .font(.headline)
+                    Text("Rotation gestures are ignored when these apps are frontmost, so their native rotation features (maps, image rotation, 3-D views) work uninterrupted.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.5))
+
+            Divider()
+
+            // App list
+            List {
+                ForEach(settings.excludedBundleIDs, id: \.self) { bid in
+                    AppRow(bundleID: bid,
+                           isPreset: defaultExcludedBundleIDs.contains(bid)) {
+                        settings.removeExclusion(bid)
+                    }
+                }
+                .onDelete { offsets in
+                    offsets.forEach { settings.excludedBundleIDs.remove(at: $0) }
+                }
+
+                // Inline add row
+                if showingAddField {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundStyle(Color.accentColor)
+                        TextField("com.example.App", text: $newBundleID)
+                            .textFieldStyle(.plain)
+                            .onSubmit { commitAdd() }
+                        Button("Add") { commitAdd() }
+                            .disabled(newBundleID.trimmingCharacters(in: .whitespaces).isEmpty)
+                        Button("Cancel") {
+                            newBundleID = ""
+                            showingAddField = false
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+            .listStyle(.inset)
+
+            Divider()
+
+            // Bottom toolbar
+            HStack {
+                Button {
+                    showingAddField = true
+                } label: {
+                    Label("Add App", systemImage: "plus")
+                }
+                .buttonStyle(.borderless)
+                .disabled(showingAddField)
+
+                Spacer()
+
+                // "Add current app" convenience button
+                if let front = NSWorkspace.shared.frontmostApplication,
+                   let bid = front.bundleIdentifier,
+                   bid != Bundle.main.bundleIdentifier {
+                    Button("Add Frontmost App") {
+                        settings.addExclusion(bid)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Add \(front.localizedName ?? bid) (\(bid))")
+                }
+
+                Spacer()
+
+                Button("Reset to Defaults") {
+                    settings.resetExclusionsToDefaults()
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func commitAdd() {
+        settings.addExclusion(newBundleID)
+        newBundleID = ""
+        showingAddField = false
+    }
+}
+
+// MARK: - AppRow
+
+private struct AppRow: View {
+    let bundleID: String
+    let isPreset: Bool
+    let onRemove: () -> Void
+
+    @State private var isHovered = false
+
+    // Resolve app name and icon from the bundle ID if the app is installed.
+    private var appInfo: (name: String, icon: NSImage?)? {
+        guard let url = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: bundleID) else { return nil }
+        let name = FileManager.default.displayName(atPath: url.path)
+            .replacingOccurrences(of: ".app", with: "")
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        return (name, icon)
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            // App icon if installed, otherwise generic
+            if let icon = appInfo?.icon {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 24, height: 24)
+            } else {
+                Image(systemName: "app.dashed")
+                    .frame(width: 24, height: 24)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(appInfo?.name ?? bundleID)
+                        .lineLimit(1)
+                    if isPreset {
+                        Text("preset")
+                            .font(.caption2.weight(.medium))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(.blue.opacity(0.15), in: Capsule())
+                            .foregroundStyle(.blue)
+                    }
+                }
+                if appInfo != nil {
+                    Text(bundleID)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            // Remove button — shown on hover
+            if isHovered {
+                Button(action: onRemove) {
+                    Image(systemName: "minus.circle.fill")
+                        .foregroundStyle(.red.opacity(0.8))
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+            }
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
     }
 }
 
