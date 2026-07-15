@@ -159,6 +159,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         if PermissionsManager.hasAccessibilityPermission() {
             gestureEngine?.start()
         } else {
+            // Show onboarding with the reset flow — guides user to clear
+            // the stale TCC entry and re-enable in System Settings.
             showOnboarding()
         }
     }
