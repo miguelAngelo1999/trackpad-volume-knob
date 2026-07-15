@@ -25,21 +25,23 @@ final class FlingEngine {
 
     // MARK: - Tuning
 
-    /// Minimum exit speed (deg/s) to trigger a fling at all
-    private let flingMinExitSpeed: Double = 4.0
+    /// Minimum exit speed (deg/s) to trigger a fling at all.
+    /// Low enough to catch short fast flicks (2-3 events).
+    private let flingMinExitSpeed: Double = 2.0
     /// DragCurve: v'(t) = -a · v^b
     private let flingDragCoeff: Double    = 30.0
     private let flingDragExp: Double      = 0.72
     /// Speed (deg/s) at which we consider the fling done
     private let flingStopSpeed: Double    = 0.5
-    /// Scale applied to exit velocity (tune to taste)
+    /// Scale applied to exit velocity
     private let flingVelocityScale: Double = 0.9
 
     // MARK: - EMA velocity tracking (updated by GestureInterpreter during gesture)
 
     private var emaVelocity: Double = 0
+    private var peakVelocity: Double = 0       // max instantaneous speed seen this gesture
     private var lastEventTime: CFTimeInterval = 0
-    private let emaAlpha: Double = 0.4
+    private let emaAlpha: Double = 0.55        // higher alpha = more responsive to latest events
 
     // MARK: - Fling state
 
@@ -55,14 +57,23 @@ final class FlingEngine {
     func reset() {
         stopFling()
         emaVelocity = 0
+        peakVelocity = 0
         lastEventTime = 0
     }
 
     /// Track a gesture event for EMA exit-velocity. Call on every rotation event.
     func track(degrees: Double, dt: Double) {
         let safeDt = max(dt, 0.001)
-        let instant = degrees / safeDt          // deg/s
-        emaVelocity = emaAlpha * instant + (1.0 - emaAlpha) * emaVelocity
+        let instant = abs(degrees) / safeDt     // deg/s (unsigned for peak tracking)
+        let signed  = degrees / safeDt
+
+        // EMA for smooth exit velocity
+        emaVelocity = emaAlpha * signed + (1.0 - emaAlpha) * emaVelocity
+
+        // Peak: decays toward current EMA so an old burst doesn't dominate forever,
+        // but a fast flick's maximum speed is preserved for the fling decision.
+        peakVelocity = max(peakVelocity * 0.85, instant)
+
         lastEventTime = CACurrentMediaTime()
     }
 
@@ -73,10 +84,17 @@ final class FlingEngine {
         let timeSinceLast = lastEventTime > 0
             ? CACurrentMediaTime() - lastEventTime : Double.infinity
 
-        let exitSpeed = abs(emaVelocity) * flingVelocityScale
-        guard exitSpeed >= flingMinExitSpeed, timeSinceLast < 0.10 else { return }
+        // Use peak velocity for the fling speed decision — it catches short fast
+        // flicks that EMA underestimates (only 2-3 events before lift-off).
+        // EMA provides the sign (direction).
+        let exitSpeed = peakVelocity * flingVelocityScale
+        let sign = emaVelocity >= 0 ? 1.0 : -1.0
 
-        flingSign     = emaVelocity >= 0 ? 1.0 : -1.0
+        // Widen the time window to 200ms — gesture .ended can arrive well after
+        // the last rotation event on a short fast flick.
+        guard exitSpeed >= flingMinExitSpeed, timeSinceLast < 0.20 else { return }
+
+        flingSign     = sign
         flingVelocity = exitSpeed
         flingCallback = callback
 
