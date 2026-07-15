@@ -1,0 +1,21 @@
+# Swift Package Manager
+.build/
+*.o
+*.d
+*.swp
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+.DS_Store
+
+# Build artifacts
+TrackpadVolumeKnob.app/
+TrackpadVolumeKnob.dmg
+*.icns
+icon.iconset/
+
+# Misc
+*.log
