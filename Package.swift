@@ -22,11 +22,17 @@ let package = Package(
             targets: ["GestureTest"]
         )
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
+    ],
     targets: [
         // Thin executable — just the entry point
         .executableTarget(
             name: "TrackpadVolumeKnobApp",
-            dependencies: ["TrackpadVolumeKnobCore"],
+            dependencies: [
+                "TrackpadVolumeKnobCore",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
             path: "TrackpadVolumeKnob/App",
             swiftSettings: [
                 .swiftLanguageMode(.v6)

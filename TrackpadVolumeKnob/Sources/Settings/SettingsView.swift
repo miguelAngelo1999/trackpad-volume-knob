@@ -38,6 +38,7 @@ private struct GeneralTab: View {
             Section("Startup") {
                 Toggle("Launch at login", isOn: $settings.launchAtLogin)
                 Toggle("Show menu bar icon", isOn: $settings.enableMenuBarIcon)
+                Toggle("Automatically check for updates", isOn: $settings.autoCheckUpdates)
             }
 
             Section("Debug") {
@@ -54,7 +55,7 @@ private struct GeneralTab: View {
                 LabeledContent("License", value: "MIT")
                 Link(
                     "Source code on GitHub",
-                    destination: URL(string: "https://github.com/yourusername/TrackpadVolumeKnob")!
+                    destination: URL(string: "https://github.com/miguelAngelo1999/trackpad-volume-knob")!
                 )
             }
         }

@@ -51,5 +51,17 @@
     <!-- Human-readable copyright -->
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026. MIT License.</string>
+
+    <!-- Sparkle auto-updater configuration -->
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/miguelAngelo1999/trackpad-volume-knob/main/appcast.xml</string>
+
+    <!-- Enable automatic update checks (user can toggle in Settings) -->
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+
+    <!-- Check interval: once per day (86400 seconds) -->
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
 </dict>
 </plist>

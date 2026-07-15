@@ -20,7 +20,16 @@ sleep 0.3
 echo "→ Copying binary..."
 cp "$BUILD_BINARY" "$BINARY"
 
+echo "→ Embedding Sparkle.framework..."
+FRAMEWORKS_DIR="$APP/Contents/Frameworks"
+mkdir -p "$FRAMEWORKS_DIR"
+# Remove old copy if present, then copy fresh from build artifacts
+rm -rf "$FRAMEWORKS_DIR/Sparkle.framework"
+cp -R "$WORKSPACE/.build/arm64-apple-macosx/debug/Sparkle.framework" "$FRAMEWORKS_DIR/"
+
 echo "→ Ad-hoc signing (stable identity across updates)..."
+# Add rpath for embedded Sparkle.framework
+install_name_tool -add_rpath @executable_path/../Frameworks "$BINARY" 2>/dev/null || true
 # --preserve-metadata=identifier keeps the bundle identifier as the signing identity
 # so TCC sees the same identifier every time and doesn't invalidate trust.
 codesign --force --sign - --preserve-metadata=identifier,entitlements "$BINARY"

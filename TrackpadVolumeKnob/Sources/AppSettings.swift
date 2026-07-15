@@ -19,6 +19,7 @@ private enum DefaultsKey {
     static let brightnessModifier  = "brightnessModifier"
     static let excludedBundleIDs   = "excludedBundleIDs"
     static let hapticLevel         = "hapticLevel"
+    static let autoCheckUpdates    = "autoCheckUpdates"
 }
 
 // MARK: - Known apps that use the rotation gesture natively.
@@ -157,6 +158,11 @@ public final class AppSettings: ObservableObject {
         didSet { defaults.set(hapticLevel.rawValue, forKey: DefaultsKey.hapticLevel) }
     }
 
+    /// Whether Sparkle auto-checks for updates (synced to Sparkle by the App target).
+    @Published public var autoCheckUpdates: Bool {
+        didSet { defaults.set(autoCheckUpdates, forKey: DefaultsKey.autoCheckUpdates) }
+    }
+
     /// Bundle IDs of apps where rotation gestures pass through untouched.
     /// Persisted as a JSON-encoded array so add/remove is trivial.
     @Published public var excludedBundleIDs: [String] {
@@ -199,7 +205,8 @@ public final class AppSettings: ObservableObject {
             DefaultsKey.appearance:         AppearanceMode.system.rawValue,
             DefaultsKey.gestureTarget:      GestureTarget.volume.rawValue,
             DefaultsKey.brightnessModifier: BrightnessModifier.none.rawValue,
-            DefaultsKey.hapticLevel:        HapticLevel.medium.rawValue
+            DefaultsKey.hapticLevel:        HapticLevel.medium.rawValue,
+            DefaultsKey.autoCheckUpdates:   true
         ])
 
         sensitivity       = defaults.double(forKey: DefaultsKey.sensitivity)
@@ -226,6 +233,7 @@ public final class AppSettings: ObservableObject {
         hapticLevel = HapticLevel(
             rawValue: defaults.string(forKey: DefaultsKey.hapticLevel) ?? ""
         ) ?? .medium
+        autoCheckUpdates = defaults.bool(forKey: DefaultsKey.autoCheckUpdates)
 
         // Load excluded bundle IDs — fall back to the built-in preset on first launch.
         if let data = defaults.data(forKey: DefaultsKey.excludedBundleIDs),

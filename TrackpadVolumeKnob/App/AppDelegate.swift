@@ -3,6 +3,7 @@
 import AppKit
 import SwiftUI
 import TrackpadVolumeKnobCore
+import Sparkle
 
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -15,14 +16,21 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hudController: HUDController?
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
+    private(set) var updaterManager: UpdaterManager!
     // MARK: - App lifecycle
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide the Dock icon — pure menu bar app
         NSApp.setActivationPolicy(.accessory)
 
+        // Initialize Sparkle updater (starts scheduled checks automatically)
+        updaterManager = UpdaterManager()
+
         // Build the dependency graph
         let appSettings = AppSettings.shared
+
+        // Sync auto-check setting: Core's AppSettings → Sparkle
+        updaterManager.automaticallyChecks = appSettings.autoCheckUpdates
         let vol = VolumeController()
         volumeController = vol
 
@@ -89,6 +97,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
+        let updateItem = NSMenuItem(
+            title: "Check for Updates…",
+            action: #selector(checkForUpdates),
+            keyEquivalent: ""
+        )
+        updateItem.target = self
+        menu.addItem(updateItem)
+
         let permItem = NSMenuItem(
             title: "Re-check Permissions",
             action: #selector(recheckPermissions),
@@ -153,6 +169,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil as AnyObject?)
         NSApp.activate(ignoringOtherApps: true)
         onboardingWindow = window
+    }
+
+    @objc private func checkForUpdates() {
+        updaterManager.checkForUpdates()
     }
 
     @objc private func recheckPermissions() {
