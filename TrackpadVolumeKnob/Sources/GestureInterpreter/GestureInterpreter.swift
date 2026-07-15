@@ -29,6 +29,9 @@ public final class GestureInterpreter: GestureEngineDelegate {
     // MARK: Fling (post-lift coast only)
     private let flingEngine = FlingEngine()
 
+    // MARK: Haptic feedback
+    private let hapticEngine = HapticEngine()
+
     // MARK: Accumulator + tracking state
     private var accumulatedDegrees: Double = 0
     private var lastEventTimestamp: TimeInterval = 0
@@ -55,6 +58,7 @@ public final class GestureInterpreter: GestureEngineDelegate {
         lastEventTimestamp = 0
         gestureNetDegrees = 0
         flingEngine.reset()
+        hapticEngine.reset()
     }
 
     public func gestureEngineDidEndGesture(_ engine: GestureEngine) {
@@ -130,8 +134,18 @@ public final class GestureInterpreter: GestureEngineDelegate {
         case .volume:
             volumeController.adjustVolume(by: finalDelta)
             if showHUD { volumeController.showHUD(increasing: finalDelta > 0) }
+            hapticEngine.feedback(
+                value: volumeController.currentVolume,
+                delta: finalDelta,
+                level: settings.hapticLevel
+            )
         case .brightness:
             brightnessController.adjustBrightness(by: finalDelta)
+            hapticEngine.feedback(
+                value: 0.5,   // brightness level tracking not exposed; notches disabled
+                delta: finalDelta,
+                level: settings.hapticLevel
+            )
         }
     }
 

@@ -18,6 +18,7 @@ private enum DefaultsKey {
     static let gestureTarget       = "gestureTarget"
     static let brightnessModifier  = "brightnessModifier"
     static let excludedBundleIDs   = "excludedBundleIDs"
+    static let hapticLevel         = "hapticLevel"
 }
 
 // MARK: - Known apps that use the rotation gesture natively.
@@ -46,6 +47,19 @@ public let defaultExcludedBundleIDs: [String] = [
     "org.mozilla.firefox",               // Firefox
     "com.apple.Safari",                  // Safari (web maps)
 ]
+
+/// Haptic feedback intensity while rotating.
+/// off    — silent
+/// light  — subtle tick on every value change
+/// medium — tick on every change + stronger bump at 10% notches
+/// strong — alignment-weight tick on every change + bump at notches
+public enum HapticLevel: String, CaseIterable, Identifiable {
+    case off    = "Off"
+    case light  = "Light"
+    case medium = "Medium"
+    case strong = "Strong"
+    public var id: String { rawValue }
+}
 
 public enum AppearanceMode: String, CaseIterable, Identifiable {
     case system = "System"
@@ -139,6 +153,10 @@ public final class AppSettings: ObservableObject {
         didSet { defaults.set(brightnessModifier.rawValue, forKey: DefaultsKey.brightnessModifier) }
     }
 
+    @Published public var hapticLevel: HapticLevel {
+        didSet { defaults.set(hapticLevel.rawValue, forKey: DefaultsKey.hapticLevel) }
+    }
+
     /// Bundle IDs of apps where rotation gestures pass through untouched.
     /// Persisted as a JSON-encoded array so add/remove is trivial.
     @Published public var excludedBundleIDs: [String] {
@@ -180,7 +198,8 @@ public final class AppSettings: ObservableObject {
             DefaultsKey.debugLogging:       false,
             DefaultsKey.appearance:         AppearanceMode.system.rawValue,
             DefaultsKey.gestureTarget:      GestureTarget.volume.rawValue,
-            DefaultsKey.brightnessModifier: BrightnessModifier.none.rawValue
+            DefaultsKey.brightnessModifier: BrightnessModifier.none.rawValue,
+            DefaultsKey.hapticLevel:        HapticLevel.medium.rawValue
         ])
 
         sensitivity       = defaults.double(forKey: DefaultsKey.sensitivity)
@@ -204,6 +223,9 @@ public final class AppSettings: ObservableObject {
         brightnessModifier = BrightnessModifier(
             rawValue: defaults.string(forKey: DefaultsKey.brightnessModifier) ?? ""
         ) ?? .none
+        hapticLevel = HapticLevel(
+            rawValue: defaults.string(forKey: DefaultsKey.hapticLevel) ?? ""
+        ) ?? .medium
 
         // Load excluded bundle IDs — fall back to the built-in preset on first launch.
         if let data = defaults.data(forKey: DefaultsKey.excludedBundleIDs),

@@ -126,6 +126,30 @@ private struct GesturesTab: View {
                 }
             }
 
+            Section("Haptic Feedback") {
+                Picker("Trackpad feedback", selection: $settings.hapticLevel) {
+                    ForEach(HapticLevel.allCases) { level in
+                        Text(level.rawValue).tag(level)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Group {
+                    switch settings.hapticLevel {
+                    case .off:
+                        Text("No trackpad feedback.")
+                    case .light:
+                        Text("Subtle tick on every change.")
+                    case .medium:
+                        Text("Snap on every change • stronger bump at 10% volume steps.")
+                    case .strong:
+                        Text("Strong click on every change • bump at 10% volume steps.")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
             Section("Fallback Mode") {
                 Toggle("Require modifier key", isOn: $settings.fallbackMode)
                 if settings.fallbackMode {
