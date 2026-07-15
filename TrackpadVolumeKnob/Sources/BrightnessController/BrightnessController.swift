@@ -65,6 +65,22 @@ public final class BrightnessController {
         }
     }
 
+    /// Returns the current brightness [0,1] for the display under the cursor.
+    public func currentBrightness() -> Float {
+        let displayID = displayUnderCursor()
+        if CGDisplayIsBuiltin(displayID) != 0 {
+            if let getFn = dsGetBrightness {
+                var val: Float = 0.5
+                if getFn(displayID, &val) == 0 { return val }
+            }
+        } else {
+            if let logical = logicalBrightness[displayID] {
+                return clampF(logical / 2.0, 0, 1)
+            }
+        }
+        return 0.5
+    }
+
     // MARK: - Built-in display
 
     private func adjustBuiltIn(delta: Float, displayID: CGDirectDisplayID) {

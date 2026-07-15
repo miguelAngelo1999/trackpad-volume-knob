@@ -137,13 +137,15 @@ public final class GestureInterpreter: GestureEngineDelegate {
             hapticEngine.feedback(
                 value: volumeController.currentVolume,
                 delta: finalDelta,
+                target: .volume,
                 level: settings.hapticLevel
             )
         case .brightness:
             brightnessController.adjustBrightness(by: finalDelta)
             hapticEngine.feedback(
-                value: 0.5,   // brightness level tracking not exposed; notches disabled
+                value: brightnessController.currentBrightness(),
                 delta: finalDelta,
+                target: .brightness,
                 level: settings.hapticLevel
             )
         }
