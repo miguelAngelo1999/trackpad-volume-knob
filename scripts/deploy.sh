@@ -20,6 +20,9 @@ sleep 0.3
 echo "→ Copying binary..."
 cp "$BUILD_BINARY" "$BINARY"
 
+echo "→ Updating Info.plist..."
+cp "$WORKSPACE/TrackpadVolumeKnob/Resources/Info.plist" "$APP/Contents/Info.plist"
+
 echo "→ Embedding Sparkle.framework..."
 FRAMEWORKS_DIR="$APP/Contents/Frameworks"
 mkdir -p "$FRAMEWORKS_DIR"
