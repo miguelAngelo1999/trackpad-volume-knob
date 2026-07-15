@@ -1,17 +1,23 @@
 // FlingEngine.swift
-// Flywheel + DragCurve fling engine for rotation gestures.
 //
-// Threading model (safe, verified manually):
-//   • Public methods are always called from the main thread (GestureInterpreter is @MainActor).
-//   • DispatchSourceTimers fire on a global background queue.
-//   • The timer event handler reads flywheelVelocity (written on main thread) — on arm64
-//     Double reads/writes are atomic at the hardware level, so no torn reads.
-//   • All callbacks are dispatched to DispatchQueue.main before invocation, so they
-//     arrive on the main thread and can safely call @MainActor methods.
+// Provides post-lift fling (momentum coast) for rotation gestures.
 //
-// Note: Package.swift uses .swiftLanguageMode(.v5) for TrackpadVolumeKnobCore so that
-// Swift 6's strict Sendable/actor-isolation checks don't false-positive on this pattern.
+// Design:
+//   • During an active gesture there is NO background timer — deltas are applied
+//     directly from trackpad events in GestureInterpreter. This eliminates the
+//     DispatchQueue.main.async pile-up that caused volume jitter.
+//
+//   • After fingers lift (endGesture), a CVDisplayLink runs the DragCurve Euler
+//     integration on a background thread, signals a DispatchSourceUserDataAdd on
+//     the main queue, and the main-queue handler reads the accumulated delta once
+//     per drain cycle. DispatchSourceUserDataAdd coalesces signals automatically,
+//     so no matter how fast CVDisplayLink fires, the main thread sees exactly one
+//     handler call per runloop turn — no racing writes.
+//
+//   • EMA exit-velocity is tracked from the last few gesture events to decide
+//     whether and how fast to fling after lift.
 
+import CoreVideo
 import Foundation
 import QuartzCore
 
@@ -19,135 +25,133 @@ final class FlingEngine {
 
     // MARK: - Tuning
 
-    private let flywheelDrag: Double      = 0.93
-    private let flywheelAccelBase: Double = 0.030
-    private let flywheelMinSpeed: Double  = 0.0003   // deg/frame
-    private let flywheelHz: Double        = 120.0
+    /// Minimum exit speed (deg/s) to trigger a fling at all
+    private let flingMinExitSpeed: Double = 4.0
+    /// DragCurve: v'(t) = -a · v^b
+    private let flingDragCoeff: Double    = 30.0
+    private let flingDragExp: Double      = 0.72
+    /// Speed (deg/s) at which we consider the fling done
+    private let flingStopSpeed: Double    = 0.5
+    /// Scale applied to exit velocity (tune to taste)
+    private let flingVelocityScale: Double = 0.9
 
-    private let flingDragCoeff: Double    = 28.0     // a in v' = -a·v^b
-    private let flingDragExp: Double      = 0.75     // b
-    private let flingStopSpeed: Double    = 0.4      // deg/s
-    private let flingMinExitSpeed: Double = 3.0      // deg/s
-    private let flingHz: Double           = 120.0
-
-    // MARK: - State (main-thread writes; background reads are safe on arm64)
-
-    private var flywheelVelocity: Double = 0
-    private var flywheelCallback: ((Double) -> Void)?
-    private var flywheelTimer: DispatchSourceTimer?
+    // MARK: - EMA velocity tracking (updated by GestureInterpreter during gesture)
 
     private var emaVelocity: Double = 0
     private var lastEventTime: CFTimeInterval = 0
-    private let emaAlpha: Double = 0.35
+    private let emaAlpha: Double = 0.4
 
-    private var flingTimer: DispatchSourceTimer?
+    // MARK: - Fling state
 
-    // MARK: - Public API (call from main thread only)
+    private var flingVelocity: Double = 0      // current speed, deg/s — written on CVDisplayLink thread, read on main
+    private var flingSign: Double = 1.0
+    private var displayLink: CVDisplayLink?
+    private var flingSource: DispatchSourceUserDataAdd?
+    private var flingCallback: ((Double) -> Void)?
 
-    func beginGesture(callback: @escaping (Double) -> Void) {
-        reset()
-        flywheelCallback = callback
-        startFlywheelTimer()
-    }
+    // MARK: - Public API (call from main thread)
 
-    func pedal(degrees: Double, dt: Double) {
-        let safeDt = max(dt, 0.001)
-        emaVelocity = emaAlpha * (degrees / safeDt) + (1.0 - emaAlpha) * emaVelocity
-        lastEventTime = CACurrentMediaTime()
-
-        let speed = abs(degrees)
-        let accelMult = 1.0 + min(speed / 6.0, 3.0)   // 1× – 4×
-        flywheelVelocity += degrees * flywheelAccelBase * accelMult
-    }
-
-    func endGesture(callback: @escaping (Double) -> Void) {
-        stopFlywheelTimer()
-        flywheelVelocity = 0
-        startFling(callback: callback)
-    }
-
+    /// Reset everything — call at gesture begin.
     func reset() {
-        stopFlywheelTimer()
-        stopFlingTimer()
-        flywheelVelocity = 0
-        flywheelCallback = nil
+        stopFling()
         emaVelocity = 0
         lastEventTime = 0
     }
 
-    // MARK: - Flywheel timer
-
-    private func startFlywheelTimer() {
-        let drag     = flywheelDrag
-        let minSpeed = flywheelMinSpeed
-
-        let timer = makeTimer()
-        schedule(timer, hz: flywheelHz)
-
-        timer.setEventHandler { [weak self] in
-            guard let self else { return }
-            self.flywheelVelocity *= drag
-            let v = self.flywheelVelocity
-            guard abs(v) >= minSpeed else { return }
-            let cb = self.flywheelCallback
-            DispatchQueue.main.async { cb?(v) }
-        }
-        flywheelTimer = timer
-        timer.resume()
+    /// Track a gesture event for EMA exit-velocity. Call on every rotation event.
+    func track(degrees: Double, dt: Double) {
+        let safeDt = max(dt, 0.001)
+        let instant = degrees / safeDt          // deg/s
+        emaVelocity = emaAlpha * instant + (1.0 - emaAlpha) * emaVelocity
+        lastEventTime = CACurrentMediaTime()
     }
 
-    private func stopFlywheelTimer() {
-        flywheelTimer?.cancel()
-        flywheelTimer = nil
-    }
+    /// Start post-lift fling. callback receives signed deg/s · dt deltas on the main thread.
+    func startFling(callback: @escaping (Double) -> Void) {
+        stopFling()
 
-    // MARK: - DragCurve fling  (Euler: v'(t) = -a·v^b)
-
-    private func startFling(callback: @escaping (Double) -> Void) {
         let timeSinceLast = lastEventTime > 0
             ? CACurrentMediaTime() - lastEventTime : Double.infinity
-        let exitSpeed = abs(emaVelocity)
+
+        let exitSpeed = abs(emaVelocity) * flingVelocityScale
         guard exitSpeed >= flingMinExitSpeed, timeSinceLast < 0.10 else { return }
 
-        let sign: Double = emaVelocity >= 0 ? 1.0 : -1.0
-        var v = exitSpeed                   // purely local — no shared state
+        flingSign     = emaVelocity >= 0 ? 1.0 : -1.0
+        flingVelocity = exitSpeed
+        flingCallback = callback
+
+        // DispatchSourceUserDataAdd on the main queue — coalesces signals so we
+        // get exactly one handler call per main-queue drain, even if CVDisplayLink
+        // fires multiple times before the main thread wakes up.
+        let source = DispatchSource.makeUserDataAddSource(queue: .main)
+        flingSource = source
 
         let a         = flingDragCoeff
         let b         = flingDragExp
-        let dt        = 1.0 / flingHz
         let stopSpeed = flingStopSpeed
 
-        let timer = makeTimer()
-        schedule(timer, hz: flingHz)
+        source.setEventHandler { [weak self] in
+            guard let self, let cb = self.flingCallback else { return }
 
-        timer.setEventHandler { [weak self] in
-            v = max(0.0, v - a * pow(v, b) * dt)
-            guard v >= stopSpeed else {
-                DispatchQueue.main.async { self?.stopFlingTimer() }
+            // Each coalesced signal represents one CVDisplayLink tick at ~dt.
+            // data() gives the number of accumulated ticks; use it to step the
+            // integrator the right number of times.
+            let ticks = source.data             // coalesced tick count
+            let dt    = 1.0 / 120.0
+
+            var v = self.flingVelocity
+            var totalDelta = 0.0
+
+            for _ in 0..<max(1, ticks) {
+                v = max(0.0, v - a * pow(v, b) * dt)
+                totalDelta += v * dt
+                if v < stopSpeed { break }
+            }
+
+            self.flingVelocity = v
+
+            if v < stopSpeed {
+                self.stopFling()
                 return
             }
-            let delta = sign * v * dt
-            DispatchQueue.main.async { callback(delta) }
+
+            cb(self.flingSign * totalDelta)
         }
-        flingTimer = timer
-        timer.resume()
+        source.resume()
+
+        // CVDisplayLink fires on its own high-priority thread — we just signal the source.
+        var link: CVDisplayLink?
+        CVDisplayLinkCreateWithActiveCGDisplays(&link)
+        guard let link else { stopFling(); return }
+
+        let sourceRef = Unmanaged.passRetained(source)
+
+        CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, ctx -> CVReturn in
+            guard let ctx else { return kCVReturnSuccess }
+            let src = Unmanaged<DispatchSourceUserDataAdd>.fromOpaque(ctx).takeUnretainedValue()
+            src.add(data: 1)
+            return kCVReturnSuccess
+        }, sourceRef.toOpaque())
+
+        CVDisplayLinkStart(link)
+        displayLink = link
+
+        // Balance the retain when the source cancels
+        source.setCancelHandler {
+            sourceRef.release()
+        }
     }
 
-    private func stopFlingTimer() {
-        flingTimer?.cancel()
-        flingTimer = nil
-    }
+    // MARK: - Private
 
-    // MARK: - Helpers
-
-    private func makeTimer() -> DispatchSourceTimer {
-        DispatchSource.makeTimerSource(flags: [], queue: .global(qos: .userInteractive))
-    }
-
-    private func schedule(_ timer: DispatchSourceTimer, hz: Double) {
-        let ns = UInt64(Double(NSEC_PER_SEC) / hz)
-        timer.schedule(deadline: .now() + .nanoseconds(Int(ns)),
-                       repeating: .nanoseconds(Int(ns)),
-                       leeway: .nanoseconds(Int(ns / 10)))
+    private func stopFling() {
+        if let link = displayLink {
+            CVDisplayLinkStop(link)
+            displayLink = nil
+        }
+        flingSource?.cancel()
+        flingSource = nil
+        flingCallback = nil
+        flingVelocity = 0
     }
 }

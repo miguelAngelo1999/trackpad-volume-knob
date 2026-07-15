@@ -1,12 +1,13 @@
 // GestureInterpreter.swift
-// Converts raw RotationEvents into volume or brightness deltas,
-// with flywheel momentum via FlingEngine for smooth fling/coast behaviour.
+// Converts raw RotationEvents into volume or brightness deltas.
 //
-// Routing logic:
-//   • settings.gestureTarget == .volume     → VolumeController (default)
-//   • settings.gestureTarget == .brightness → BrightnessController
-//   • settings.brightnessModifier != .none  → hold that key to switch to brightness
-//     while base target remains volume (and vice-versa)
+// During an active gesture: deltas are applied synchronously on the main thread
+// directly from each trackpad event — no background timer, no async dispatch,
+// no races. This is what eliminated the volume jitter.
+//
+// After lift-off: FlingEngine runs a CVDisplayLink-based DragCurve coast,
+// coalesced through DispatchSourceUserDataAdd so the main thread is never
+// flooded with pending volume writes.
 import Foundation
 import AppKit
 
@@ -21,10 +22,10 @@ public final class GestureInterpreter: GestureEngineDelegate {
     private let brightnessController: BrightnessController
     private let hudController: HUDController
 
-    // MARK: Flywheel / fling
+    // MARK: Fling (post-lift coast only)
     private let flingEngine = FlingEngine()
 
-    // MARK: Accumulator state (used during active gesture only)
+    // MARK: Accumulator state
     private var accumulatedDegrees: Double = 0
     private var lastEventTimestamp: TimeInterval = 0
 
@@ -47,24 +48,16 @@ public final class GestureInterpreter: GestureEngineDelegate {
     public func gestureEngineDidBeginGesture(_ engine: GestureEngine) {
         accumulatedDegrees = 0
         lastEventTimestamp = 0
-
-        // Spin up the flywheel; its callback applies deltas in real-time
-        // while fingers are still on the trackpad.
-        // Callback arrives on main queue (DispatchQueue.main.async in FlingEngine).
-        let target = resolvedTarget()
-        flingEngine.beginGesture { [weak self] degrees in
-            self?.applyDelta(degrees, target: target)
-        }
+        flingEngine.reset()
     }
 
     public func gestureEngineDidEndGesture(_ engine: GestureEngine) {
         accumulatedDegrees = 0
 
-        // Hand off to DragCurve fling so momentum coasts after lift-off.
-        // Callback arrives on main queue (DispatchQueue.main.async in FlingEngine).
+        // Start post-lift fling — coasts to a stop via CVDisplayLink.
         let target = resolvedTarget()
-        flingEngine.endGesture { [weak self] degrees in
-            self?.applyDelta(degrees, target: target)
+        flingEngine.startFling { [weak self] delta in
+            self?.applyDelta(delta, target: target)
         }
     }
 
@@ -80,39 +73,39 @@ public final class GestureInterpreter: GestureEngineDelegate {
         accumulatedDegrees += delta
         guard abs(accumulatedDegrees) >= settings.deadZoneDegrees else { return }
 
-        // 3. dt for EMA velocity in FlingEngine
+        // 3. dt for FlingEngine EMA velocity tracking
         let now = event.timestamp
         let dt = lastEventTimestamp > 0 ? (now - lastEventTimestamp) : 0.016
         lastEventTimestamp = now
 
-        // 4. Feed into flywheel — this both displays the change immediately
-        //    and builds up exit velocity for the post-lift fling.
-        flingEngine.pedal(degrees: accumulatedDegrees, dt: dt)
+        // 4. Feed into fling engine for exit-velocity tracking only (no timer started)
+        flingEngine.track(degrees: accumulatedDegrees, dt: dt)
 
-        // 5. Reset accumulator once consumed
+        // 5. Apply the delta RIGHT NOW on the main thread — synchronous, no queue hop,
+        //    no racing writes possible.
+        applyDelta(accumulatedDegrees, target: resolvedTarget())
+
+        // 6. Consume accumulator
         accumulatedDegrees = 0
     }
 
     // MARK: - Delta application
 
-    /// Converts a raw degree delta → controller call, applying sensitivity + acceleration.
     private func applyDelta(_ degrees: Double, target: GestureTarget) {
         let degreesPerStep = max(0.5, settings.degreesPerStep)
         let rawSteps = degrees / degreesPerStep
-        guard abs(rawSteps) >= 0.05 else { return }  // sub-threshold ticks during coasting
+        guard abs(rawSteps) >= 0.05 else { return }
 
         let accelerated = applyAcceleration(steps: rawSteps, speed: abs(degrees))
         let scalarDelta = Float(accelerated * settings.sensitivity)
 
         if settings.debugLogging {
-            Logger.debug("Interpreter: target=\(target) Δ°=\(String(format: "%.3f", degrees)) steps=\(String(format: "%.3f", rawSteps)) Δ=\(String(format: "%.4f", scalarDelta))")
+            Logger.debug("Interpreter: target=\(target) Δ°=\(String(format:"%.3f",degrees)) Δ=\(String(format:"%.4f",scalarDelta))")
         }
 
         switch target {
-        case .volume:
-            volumeController.adjustVolume(by: scalarDelta)
-        case .brightness:
-            brightnessController.adjustBrightness(by: scalarDelta)
+        case .volume:     volumeController.adjustVolume(by: scalarDelta)
+        case .brightness: brightnessController.adjustBrightness(by: scalarDelta)
         }
     }
 
