@@ -20,18 +20,19 @@ open class VolumeController {
         currentVolume = getCoreAudioVolume() ?? 0.5
     }
 
-    /// Adjust volume by a signed delta and show the native macOS HUD.
+    /// Adjust volume by a signed scalar delta [0..1].
+    /// Writes CoreAudio silently — no media key, no HUD snap.
+    /// Call showHUD() once at gesture end to surface the native HUD.
     open func adjustVolume(by delta: Float) {
         guard delta != 0 else { return }
-
-        // 1. Change the actual volume via CoreAudio (fast, works with all devices)
         let newVolume = (currentVolume + delta).clamped(to: 0.0...1.0)
         setCoreAudioVolume(newVolume)
+    }
 
-        // 2. Post one synthetic media key event so the native HUD appears.
-        //    We post the key that matches the direction; the HUD reads the
-        //    current CoreAudio volume so it shows the correct level.
-        postMediaKey(delta > 0 ? Self.NX_KEYTYPE_SOUND_UP : Self.NX_KEYTYPE_SOUND_DOWN)
+    /// Post one media key in the right direction so the native HUD appears.
+    /// Call once at gesture end (or fling end), not on every event.
+    open func showHUD(increasing: Bool) {
+        postMediaKey(increasing ? Self.NX_KEYTYPE_SOUND_UP : Self.NX_KEYTYPE_SOUND_DOWN)
     }
 
     open func setVolume(_ volume: Float) {
