@@ -35,7 +35,8 @@ public final class GestureInterpreter: GestureEngineDelegate {
     // MARK: Accumulator + tracking state
     private var accumulatedDegrees: Double = 0
     private var lastEventTimestamp: TimeInterval = 0
-    private var gestureNetDegrees: Double = 0     // total signed degrees this gesture (for HUD direction)
+    private var gestureNetDegrees: Double = 0
+    private var lockedTarget: GestureTarget = .volume   // resolved once at gesture begin
 
     // MARK: Init
 
@@ -57,6 +58,8 @@ public final class GestureInterpreter: GestureEngineDelegate {
         accumulatedDegrees = 0
         lastEventTimestamp = 0
         gestureNetDegrees = 0
+        // Lock target at gesture begin while modifier key is still held.
+        lockedTarget = resolvedTarget()
         flingEngine.reset()
         hapticEngine.reset()
     }
@@ -64,12 +67,18 @@ public final class GestureInterpreter: GestureEngineDelegate {
     public func gestureEngineDidEndGesture(_ engine: GestureEngine) {
         accumulatedDegrees = 0
 
-        // Show native HUD once — direction based on net movement this gesture.
-        let increasing = gestureNetDegrees >= 0
-        volumeController.showHUD(increasing: increasing)
+        // Show HUD for the correct target using the locked target.
+        switch lockedTarget {
+        case .volume:
+            let increasing = gestureNetDegrees >= 0
+            volumeController.showHUD(increasing: increasing)
+        case .brightness:
+            break   // brightness OSD is shown per-adjustment, not at end
+        }
 
-        // Start post-lift fling.
-        let target = resolvedTarget()
+        // Fling uses the locked target so lifting Control mid-gesture
+        // doesn't switch the coast back to volume.
+        let target = lockedTarget
         flingEngine.startFling { [weak self] delta in
             self?.applyDelta(delta, target: target, showHUD: false)
         }
@@ -98,8 +107,8 @@ public final class GestureInterpreter: GestureEngineDelegate {
         // 4. Track for fling exit-velocity.
         flingEngine.track(degrees: deg, dt: dt)
 
-        // 5. Apply directly — no media key, perfectly smooth.
-        applyDelta(deg, target: resolvedTarget(), showHUD: false)
+        // 5. Apply using locked target — don't re-evaluate modifier mid-gesture.
+        applyDelta(deg, target: lockedTarget, showHUD: false)
     }
 
     // MARK: - Delta application
