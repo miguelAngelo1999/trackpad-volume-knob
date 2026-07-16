@@ -18,6 +18,10 @@ pkill -x MacTrackpadFix 2>/dev/null || true
 pkill -x TrackpadVolumeKnob 2>/dev/null || true
 sleep 0.3
 
+echo "→ Resetting stale TCC accessibility entry..."
+/usr/bin/tccutil reset Accessibility com.trackpadvolumeknob 2>/dev/null || true
+defaults delete com.trackpadvolumeknob LastLaunchedBuildVersion 2>/dev/null || true
+
 echo "→ Creating app bundle..."
 mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$APP/Contents/Resources"
