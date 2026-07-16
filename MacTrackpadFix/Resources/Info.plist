@@ -17,10 +17,10 @@
     <string>com.trackpadvolumeknob</string>
 
     <key>CFBundleVersion</key>
-    <string>3</string>
+    <string>4</string>
 
     <key>CFBundleShortVersionString</key>
-    <string>2.0.0</string>
+    <string>2.0.1</string>
 
     <key>CFBundleExecutable</key>
     <string>MacTrackpadFix</string>
