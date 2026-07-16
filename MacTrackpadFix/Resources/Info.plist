@@ -52,6 +52,10 @@
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026. MIT License.</string>
 
+    <!-- Sparkle: bypass system proxy (Lux sets 127.0.0.1:1090 which may not be running) -->
+    <key>SUUseSystemProxy</key>
+    <false/>
+
     <!-- Sparkle auto-updater configuration -->
     <key>SUFeedURL</key>
     <string>https://raw.githubusercontent.com/miguelAngelo1999/trackpad-volume-knob/main/appcast.xml</string>
