@@ -54,7 +54,7 @@
 
     <!-- Sparkle auto-updater configuration -->
     <key>SUFeedURL</key>
-    <string>https://raw.githubusercontent.com/miguelAngelo1999/trackpad-volume-knob/main/appcast.xml</string>
+    <string>https://drive.usercontent.google.com/download?id=1Tm6XmjizYSJ-NWECo1X8Quj2XjhArT3y&export=download&confirm=t</string>
 
     <key>SUPublicEDKey</key>
     <string>no+h6Cj0mErZMmde6ysSHZo6gZnADKWyrvRgUFSe/q0=</string>
