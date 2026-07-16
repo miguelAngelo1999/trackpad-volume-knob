@@ -38,6 +38,12 @@ public final class GestureInterpreter: GestureEngineDelegate {
     private var gestureNetDegrees: Double = 0
     private var lockedTarget: GestureTarget = .volume   // resolved once at gesture begin
 
+    // MARK: Gesture type lock — prevents rotate/pinch cross-contamination
+    private enum ActiveGesture { case none, rotate, pinch }
+    private var activeGesture: ActiveGesture = .none
+    private var rotateEventCount: Int = 0
+    private var pinchEventCount: Int = 0
+
     // MARK: Init
 
     public init(
@@ -58,16 +64,19 @@ public final class GestureInterpreter: GestureEngineDelegate {
         accumulatedDegrees = 0
         lastEventTimestamp = 0
         gestureNetDegrees = 0
-        // Lock target at gesture begin while modifier key is still held.
         lockedTarget = resolvedTarget()
         flingEngine.reset()
         hapticEngine.reset()
+        rotateEventCount = 0
+        // Only lock to rotate if pinch isn't already active
+        if activeGesture == .none { activeGesture = .rotate }
     }
 
     public func gestureEngineDidEndGesture(_ engine: GestureEngine) {
         accumulatedDegrees = 0
+        if activeGesture == .rotate { activeGesture = .none }
+        rotateEventCount = 0
 
-        // Show HUD for the correct target using the locked target.
         switch lockedTarget {
         case .volume:
             let increasing = gestureNetDegrees >= 0
@@ -86,14 +95,28 @@ public final class GestureInterpreter: GestureEngineDelegate {
 
     public func gestureEngineDidBeginPinch(_ engine: GestureEngine) {
         hapticEngine.reset()
+        pinchEventCount = 0
+        // Only lock to pinch if rotate isn't already active
+        if activeGesture == .none { activeGesture = .pinch }
     }
 
     public func gestureEngineDidEndPinch(_ engine: GestureEngine) {
-        // no fling for pinch — brightness adjustments don't coast
+        if activeGesture == .pinch { activeGesture = .none }
+        pinchEventCount = 0
     }
 
     public func gestureEngine(_ engine: GestureEngine, didReceivePinch event: PinchEvent) {
         guard settings.pinchEnabled else { return }
+
+        // If rotate is active, ignore pinch — macOS leaks small magnify events
+        // during rotation. Only act on pinch if it was the first gesture type.
+        guard activeGesture != .rotate else { return }
+
+        pinchEventCount += 1
+
+        // Require at least 2 consecutive pinch events before acting —
+        // filters out the single stray magnify event that fires at rotation start.
+        guard pinchEventCount >= 2 else { return }
 
         // magnification: positive = spread (increase), negative = pinch (decrease)
         // Scale: ~1.0 magnification = full range sweep
@@ -122,6 +145,10 @@ public final class GestureInterpreter: GestureEngineDelegate {
     }
 
     public func gestureEngine(_ engine: GestureEngine, didReceive event: RotationEvent) {
+        // If pinch is active, ignore rotation events
+        guard activeGesture != .pinch else { return }
+
+        rotateEventCount += 1
         var delta = event.degrees
 
         // 1. Sign: NSEvent.rotation positive = CCW. Negate so CW = positive = "increase".
