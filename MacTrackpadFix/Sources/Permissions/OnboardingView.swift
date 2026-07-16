@@ -81,9 +81,10 @@ public struct OnboardingView: View {
         .frame(width: 480)
         .onAppear {
             checkPermission()
-            // Trigger AX prompt so app appears in the list immediately
             if !hasPermission {
-                PermissionsManager.requestAccessibilityPermission(showPrompt: true)
+                // Register the app in the TCC list silently (no dialog)
+                // so it appears in System Settings ready to be toggled on.
+                PermissionsManager.requestAccessibilityPermission(showPrompt: false)
                 startPolling()
             }
         }
