@@ -117,10 +117,9 @@ def upload_xml_overwrite(service, file_id, xml_path):
     print(f'  ↻ Updated appcast.xml (id={f["id"]})')
 
 def update_appcast_xml(version, signature, length, notes):
-    """Prepend a new item to appcast.xml for this version."""
+    """Prepend a new item to appcast.xml (GitHub version — uses GitHub release URLs)."""
     text = APPCAST_XML.read_text()
 
-    # Get current build number from Info.plist
     build_m = re.search(
         r'<key>CFBundleVersion</key>\s*<string>(\d+)</string>',
         INFOPLIST.read_text()
@@ -129,6 +128,8 @@ def update_appcast_xml(version, signature, length, notes):
 
     from datetime import datetime, timezone
     pubdate = datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S +0000')
+
+    github_url = f'https://github.com/miguelAngelo1999/trackpad-volume-knob/releases/download/v{version}/MacTrackpadFix-{version}.pkg'
 
     new_item = f'''    <item>
       <title>Version {version}</title>
@@ -141,7 +142,7 @@ def update_appcast_xml(version, signature, length, notes):
         <p>{notes}</p>
       ]]></description>
       <enclosure
-        url="{PKG_URL}"
+        url="{github_url}"
         length="{length}"
         type="application/x-newton-compatible-pkg"
         sparkle:edSignature="{signature}"
@@ -149,10 +150,16 @@ def update_appcast_xml(version, signature, length, notes):
     </item>
 
 '''
-    # Insert after <language>en</language>
     text = text.replace('    <item>', new_item + '    <item>', 1)
     APPCAST_XML.write_text(text)
-    print(f'  ✓ appcast.xml updated for {version}')
+    print(f'  ✓ appcast.xml (GitHub) updated for {version}')
+
+    # Also generate the Drive version of appcast.xml (same but with Drive pkg URL)
+    drive_text = text.replace(github_url, PKG_URL)
+    drive_appcast = REPO_ROOT / 'appcast_drive.xml'
+    drive_appcast.write_text(drive_text)
+    print(f'  ✓ appcast_drive.xml (Drive) updated for {version}')
+    return drive_appcast
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
@@ -193,7 +200,7 @@ def main():
 
     # 5. Update appcast.xml
     print('\n── Updating appcast.xml ────────────────────────────────────────')
-    update_appcast_xml(version, signature, length, notes)
+    drive_appcast = update_appcast_xml(version, signature, length, notes)
 
     if args.dry_run:
         print('\n✅ Dry run — skipping upload and push.')
@@ -203,9 +210,13 @@ def main():
     print('\n── Uploading to Google Drive ───────────────────────────────────')
     service = gdrive_service()
     upload_overwrite(service, PKG_FILE_ID, pkg_path, 'application/x-newton-compatible-pkg')
-    upload_xml_overwrite(service, APPCAST_FILE_ID, APPCAST_XML)
+    upload_xml_overwrite(service, APPCAST_FILE_ID, drive_appcast)  # Drive version has Drive pkg URL
 
-    # 7. Commit and push
+    # 7. Upload pkg to GitHub Releases too (for old users on GitHub appcast)
+    print('\n── Uploading to GitHub Releases ────────────────────────────────')
+    run(f'env -u HTTPS_PROXY -u HTTP_PROXY gh release create v{version} {pkg_path} --title "Mac Trackpad Fix {version}" --notes "{notes}" 2>&1 || env -u HTTPS_PROXY -u HTTP_PROXY gh release upload v{version} {pkg_path} 2>&1', cwd=REPO_ROOT)
+
+    # 8. Commit and push GitHub appcast
     print('\n── Committing ──────────────────────────────────────────────────')
     run(f'git add appcast.xml MacTrackpadFix/Resources/Info.plist', cwd=REPO_ROOT)
     run(f'git commit -m "v{version}: {notes}"', cwd=REPO_ROOT)
