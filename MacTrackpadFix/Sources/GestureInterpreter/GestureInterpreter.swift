@@ -44,6 +44,17 @@ public final class GestureInterpreter: GestureEngineDelegate {
     private var rotateEventCount: Int = 0
     private var pinchEventCount: Int = 0
 
+    // MARK: Gesture classifier — ratio-based disambiguation
+    // Accumulate magnitude of both types during the classification window,
+    // then lock to whichever is dominant. Prevents stray leaks from firing.
+    private var classifyWindowRotateMag: Double = 0  // sum of |degrees| so far
+    private var classifyWindowPinchMag: Double = 0   // sum of |magnification| so far
+    private var classifyWindowEvents: Int = 0
+    private let classifyWindowSize: Int = 4           // events before committing
+    // Pinch magnification is ~0.05 per event; rotation is ~3° per event.
+    // Normalize pinch by this factor so they're on comparable scales.
+    private let pinchNormFactor: Double = 60.0        // 1 unit pinch ≈ 60° rotation
+
     // MARK: Init
 
     public init(
@@ -68,7 +79,9 @@ public final class GestureInterpreter: GestureEngineDelegate {
         flingEngine.reset()
         hapticEngine.reset()
         rotateEventCount = 0
-        // Only lock to rotate if pinch isn't already active
+        classifyWindowRotateMag = 0
+        classifyWindowPinchMag = 0
+        classifyWindowEvents = 0
         if activeGesture == .none { activeGesture = .rotate }
     }
 
@@ -76,6 +89,9 @@ public final class GestureInterpreter: GestureEngineDelegate {
         accumulatedDegrees = 0
         if activeGesture == .rotate { activeGesture = .none }
         rotateEventCount = 0
+        classifyWindowRotateMag = 0
+        classifyWindowPinchMag = 0
+        classifyWindowEvents = 0
 
         switch lockedTarget {
         case .volume:
@@ -96,27 +112,50 @@ public final class GestureInterpreter: GestureEngineDelegate {
     public func gestureEngineDidBeginPinch(_ engine: GestureEngine) {
         hapticEngine.reset()
         pinchEventCount = 0
-        // Only lock to pinch if rotate isn't already active
+        classifyWindowRotateMag = 0
+        classifyWindowPinchMag = 0
+        classifyWindowEvents = 0
         if activeGesture == .none { activeGesture = .pinch }
     }
 
     public func gestureEngineDidEndPinch(_ engine: GestureEngine) {
         if activeGesture == .pinch { activeGesture = .none }
         pinchEventCount = 0
+        classifyWindowRotateMag = 0
+        classifyWindowPinchMag = 0
+        classifyWindowEvents = 0
     }
 
     public func gestureEngine(_ engine: GestureEngine, didReceivePinch event: PinchEvent) {
         guard settings.pinchEnabled else { return }
 
-        // If rotate is active, ignore pinch — macOS leaks small magnify events
-        // during rotation. Only act on pinch if it was the first gesture type.
+        let mag = abs(event.magnification)
+        classifyWindowPinchMag += mag * pinchNormFactor
+        classifyWindowEvents += 1
+
+        // During classification window, accumulate both magnitudes
+        if classifyWindowEvents <= classifyWindowSize {
+            // Not committed yet — wait
+            if classifyWindowEvents == classifyWindowSize {
+                // Commit: whichever type has more accumulated magnitude wins
+                if classifyWindowRotateMag > classifyWindowPinchMag {
+                    activeGesture = .rotate
+                    if settings.debugLogging {
+                        Logger.debug("Classifier: committed to ROTATE (rotate=\(String(format:"%.1f",classifyWindowRotateMag)) pinch=\(String(format:"%.1f",classifyWindowPinchMag))")
+                    }
+                } else {
+                    activeGesture = .pinch
+                    if settings.debugLogging {
+                        Logger.debug("Classifier: committed to PINCH (rotate=\(String(format:"%.1f",classifyWindowRotateMag)) pinch=\(String(format:"%.1f",classifyWindowPinchMag))")
+                    }
+                }
+            }
+            return // don't act during classification window
+        }
+
         guard activeGesture != .rotate else { return }
 
         pinchEventCount += 1
-
-        // Require at least 2 consecutive pinch events before acting —
-        // filters out the single stray magnify event that fires at rotation start.
-        guard pinchEventCount >= 2 else { return }
 
         // magnification: positive = spread (increase), negative = pinch (decrease)
         // Scale: ~1.0 magnification = full range sweep
@@ -145,7 +184,10 @@ public final class GestureInterpreter: GestureEngineDelegate {
     }
 
     public func gestureEngine(_ engine: GestureEngine, didReceive event: RotationEvent) {
-        // If pinch is active, ignore rotation events
+        // Accumulate rotation magnitude for classifier
+        classifyWindowRotateMag += abs(event.degrees)
+
+        // If pinch is active after classification, ignore rotation events
         guard activeGesture != .pinch else { return }
 
         rotateEventCount += 1
