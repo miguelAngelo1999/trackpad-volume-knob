@@ -22,10 +22,10 @@
         </ul>
       ]]></description>
       <enclosure
-        url="https://github.com/miguelAngelo1999/trackpad-volume-knob/releases/download/v2.0.0/MacTrackpadFix-2.0.0.zip"
-        length="4849491"
-        type="application/octet-stream"
-        sparkle:edSignature="M46YRY67vEHC53jDgAzKjKRNQ4zWkXEAAd0WWEAzDNbvIwVD4qAECVN5zns2KbFu7phhCLn7I7q6GdLXD6PrAw=="
+        url="https://github.com/miguelAngelo1999/trackpad-volume-knob/releases/download/v2.0.0/MacTrackpadFix-2.0.0.pkg"
+        length="2734721"
+        type="application/x-newton-compatible-pkg"
+        sparkle:edSignature="jJQGhJ/3MNimRXDogPFXM2twkKTBAsQRcDnHqvCKqmDCjmxrjxiQtjOS/qu9AnROONva37xumjNRBm26ndEtAw=="
       />
     </item>
 

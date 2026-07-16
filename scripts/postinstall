@@ -1,0 +1,38 @@
+#!/bin/bash
+# postinstall — runs as root after the pkg installs Mac Trackpad Fix.app
+# 1. Remove stale TCC accessibility entry for the old app name
+# 2. Remove the old TrackpadVolumeKnob.app bundle
+# 3. Launch the new app so it registers with macOS
+
+set -e
+
+OLD_BUNDLE_ID="com.trackpadvolumeknob"
+OLD_APP="/Applications/TrackpadVolumeKnob.app"
+NEW_APP="/Applications/Mac Trackpad Fix.app"
+
+# ── 1. Remove old TCC entry ───────────────────────────────────────────────────
+# tccutil reset for a specific bundle ID requires macOS 10.14+ (we target 14+)
+# Running as root from postinstall, this works without SIP issues for user TCC.
+echo "→ Removing stale TCC accessibility entry for $OLD_BUNDLE_ID..."
+/usr/bin/tccutil reset Accessibility "$OLD_BUNDLE_ID" 2>/dev/null || true
+
+# ── 2. Kill old app if still running ─────────────────────────────────────────
+echo "→ Stopping old app if running..."
+/usr/bin/pkill -x "TrackpadVolumeKnob" 2>/dev/null || true
+/usr/bin/pkill -x "Mac Trackpad Fix" 2>/dev/null || true
+sleep 0.5
+
+# ── 3. Remove old app bundle ──────────────────────────────────────────────────
+if [ -d "$OLD_APP" ]; then
+    echo "→ Removing $OLD_APP..."
+    /bin/rm -rf "$OLD_APP"
+fi
+
+# ── 4. Launch new app ─────────────────────────────────────────────────────────
+# Open as the current logged-in user (not root) so TCC prompt appears correctly
+CURRENT_USER=$(stat -f "%Su" /dev/console)
+echo "→ Launching as $CURRENT_USER..."
+/bin/launchctl asuser $(id -u "$CURRENT_USER") /usr/bin/open "$NEW_APP"
+
+echo "✓ Mac Trackpad Fix installed successfully."
+exit 0

@@ -39,8 +39,9 @@ cp -R "$WORKSPACE/.build/arm64-apple-macosx/debug/Sparkle.framework" "$FRAMEWORK
 
 echo "→ Ad-hoc signing (stable identity across updates)..."
 install_name_tool -add_rpath @executable_path/../Frameworks "$BINARY" 2>/dev/null || true
-codesign --force --sign - --preserve-metadata=identifier,entitlements "$BINARY"
-codesign --force --deep --sign - "$APP"
+# Force the bundle identifier as the signing identity so TCC always sees com.trackpadvolumeknob
+codesign --force --sign - --identifier "com.trackpadvolumeknob" "$BINARY"
+codesign --force --deep --sign - --identifier "com.trackpadvolumeknob" "$APP"
 
 echo "→ Launching..."
 open "$APP"
