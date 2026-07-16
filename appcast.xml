@@ -14,9 +14,9 @@
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <description><![CDATA[
         <h2>Mac Trackpad Fix 2.0.1</h2>
-        <p>Fixes the app folder name on disk — now correctly appears as <strong>Mac Trackpad Fix.app</strong> in /Applications.</p>
+        <p>Fixes the app folder name on disk - now correctly appears as <strong>Mac Trackpad Fix.app</strong> in /Applications.</p>
         <ul>
-          <li>Renames <code>TrackpadVolumeKnob.app</code> → <code>Mac Trackpad Fix.app</code></li>
+          <li>Renames <code>TrackpadVolumeKnob.app</code> -> <code>Mac Trackpad Fix.app</code></li>
           <li>Clears stale Accessibility permission entry</li>
         </ul>
       ]]></description>
@@ -36,10 +36,10 @@
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <description><![CDATA[
         <h2>Mac Trackpad Fix 2.0</h2>
-        <p>TrackpadVolumeKnob has been renamed to <strong>Mac Trackpad Fix</strong> — same app, better name.</p>
+        <p>TrackpadVolumeKnob has been renamed to <strong>Mac Trackpad Fix</strong> - same app, better name.</p>
         <ul>
           <li><strong>Renamed</strong> to Mac Trackpad Fix</li>
-          <li><strong>New icon</strong> — trackpad with rotation arrows</li>
+          <li><strong>New icon</strong> - trackpad with rotation arrows</li>
           <li>All existing settings and preferences are preserved</li>
         </ul>
       ]]></description>
@@ -58,12 +58,12 @@
       <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <description><![CDATA[
-        <h2>v1.1.0 — Pinch to Brightness</h2>
+        <h2>v1.1.0 - Pinch to Brightness</h2>
         <ul>
-          <li><strong>Pinch gesture</strong> — spread to increase brightness, pinch to decrease (built-in + external displays via DDC)</li>
-          <li><strong>Sparkle auto-updater</strong> — Check for Updates in the menu bar, daily background checks</li>
-          <li>Pinch on/off toggle and target (brightness or volume) in Settings → Gestures</li>
-          <li>Settings → General: auto-update toggle</li>
+          <li><strong>Pinch gesture</strong> - spread to increase brightness, pinch to decrease (built-in + external displays via DDC)</li>
+          <li><strong>Sparkle auto-updater</strong> - Check for Updates in the menu bar, daily background checks</li>
+          <li>Pinch on/off toggle and target (brightness or volume) in Settings -> Gestures</li>
+          <li>Settings -> General: auto-update toggle</li>
         </ul>
       ]]></description>
       <enclosure
