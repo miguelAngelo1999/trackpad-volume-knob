@@ -4,6 +4,7 @@ import AppKit
 import SwiftUI
 import MacTrackpadFixCore
 import Sparkle
+import CommonCrypto
 
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -191,16 +192,29 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Post-update TCC reset
 
-    /// Detects first launch after a version update and resets the stale TCC
-    /// entry so the user only needs to flip the toggle in System Settings.
+    /// Detects first launch after a binary change (checksum-based, not version-based)
+    /// and resets the stale TCC entry so the user only needs to flip the toggle.
     private func handlePostUpdateTCCReset() {
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
-        let lastLaunchedVersion = UserDefaults.standard.string(forKey: "LastLaunchedBuildVersion") ?? ""
+        guard let executableURL = Bundle.main.executableURL else { return }
 
-        if currentVersion != lastLaunchedVersion {
-            // New version — reset stale TCC entry so toggle works cleanly
+        // Hash the executable binary
+        let currentHash = sha256(of: executableURL)
+        let lastHash = UserDefaults.standard.string(forKey: "LastLaunchedBinaryHash") ?? ""
+
+        if currentHash != lastHash {
             PermissionsManager.resetAccessibilityTrust()
-            UserDefaults.standard.set(currentVersion, forKey: "LastLaunchedBuildVersion")
+            if !currentHash.isEmpty {
+                UserDefaults.standard.set(currentHash, forKey: "LastLaunchedBinaryHash")
+            }
         }
+    }
+
+    private func sha256(of url: URL) -> String {
+        guard let data = try? Data(contentsOf: url) else { return "" }
+        var hash = [UInt8](repeating: 0, count: 32)
+        data.withUnsafeBytes { buffer in
+            _ = CC_SHA256(buffer.baseAddress, CC_LONG(data.count), &hash)
+        }
+        return hash.map { String(format: "%02x", $0) }.joined()
     }
 }
