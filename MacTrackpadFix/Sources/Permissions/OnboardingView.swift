@@ -6,7 +6,6 @@ public struct OnboardingView: View {
 
     @State private var hasPermission = false
     @State private var isPolling = false
-    @State private var didReset = false
 
     public init(onComplete: @escaping () -> Void) {
         self.onComplete = onComplete
@@ -45,25 +44,14 @@ public struct OnboardingView: View {
                     isGranted: hasPermission
                 )
 
-                // Explain the reset step when needed
                 if !hasPermission {
-                    if didReset {
-                        Label(
-                            "Toggle the switch next to Mac Trackpad Fix in System Settings, then click \"Check Again\".",
-                            systemImage: "arrow.counterclockwise.circle.fill"
-                        )
-                        .font(.callout)
-                        .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                    } else {
-                        Label(
-                            "If you've already granted access before, click \"Reset & Re-authorize\" to clear the stale entry — macOS requires this after the app is updated.",
-                            systemImage: "info.circle"
-                        )
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
+                    Label(
+                        "Enable Mac Trackpad Fix in System Settings, then click \"Check Again\".",
+                        systemImage: "info.circle"
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(24)
@@ -78,31 +66,27 @@ public struct OnboardingView: View {
                     .padding(24)
             } else {
                 HStack(spacing: 10) {
-                    // Primary: reset stale entry + open Settings
-                    Button(didReset ? "Open System Settings" : "Reset & Re-authorize") {
-                        didReset = true
-                        PermissionsManager.resetAndRequestPermission()
+                    Button("Open System Settings") {
+                        PermissionsManager.openAccessibilitySettings()
                         startPolling()
                     }
                     .buttonStyle(.borderedProminent)
 
                     Button("Check Again") { checkPermission() }
                         .buttonStyle(.bordered)
-
-                    // First-time grant (no prior entry to reset)
-                    if !didReset {
-                        Button("First-time Setup") {
-                            PermissionsManager.openAccessibilitySettings()
-                            startPolling()
-                        }
-                        .buttonStyle(.bordered)
-                    }
                 }
                 .padding(24)
             }
         }
-        .frame(width: 520)
-        .onAppear { checkPermission() }
+        .frame(width: 480)
+        .onAppear {
+            checkPermission()
+            // Trigger AX prompt so app appears in the list immediately
+            if !hasPermission {
+                PermissionsManager.requestAccessibilityPermission(showPrompt: true)
+                startPolling()
+            }
+        }
     }
 
     private func checkPermission() {
