@@ -52,6 +52,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
         setupStatusItem()
 
+        // On first launch after an update, reset stale TCC entry so the user
+        // only needs to flip the toggle — no confusing "already checked but broken" state.
+        handlePostUpdateTCCReset()
+
         if !PermissionsManager.hasAccessibilityPermission() {
             showOnboarding()
         } else {
@@ -182,6 +186,21 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             // Show onboarding with the reset flow — guides user to clear
             // the stale TCC entry and re-enable in System Settings.
             showOnboarding()
+        }
+    }
+
+    // MARK: - Post-update TCC reset
+
+    /// Detects first launch after a version update and resets the stale TCC
+    /// entry so the user only needs to flip the toggle in System Settings.
+    private func handlePostUpdateTCCReset() {
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
+        let lastLaunchedVersion = UserDefaults.standard.string(forKey: "LastLaunchedBuildVersion") ?? ""
+
+        if currentVersion != lastLaunchedVersion {
+            // New version — reset stale TCC entry so toggle works cleanly
+            PermissionsManager.resetAccessibilityTrust()
+            UserDefaults.standard.set(currentVersion, forKey: "LastLaunchedBuildVersion")
         }
     }
 }
