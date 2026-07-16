@@ -21,10 +21,10 @@ public struct OnboardingView: View {
                     .foregroundStyle(Color.accentColor)
                     .symbolEffect(.pulse)
 
-                Text("TrackpadVolumeKnob")
+                Text("Mac Trackpad Fix")
                     .font(.title2.bold())
 
-                Text("Rotate two fingers on your trackpad to control volume and brightness.")
+                Text("Use rotate and pinch gestures on your trackpad to control volume and brightness.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal)
@@ -41,7 +41,7 @@ public struct OnboardingView: View {
 
                 PermissionRow(
                     title: "Accessibility",
-                    description: "Allows TrackpadVolumeKnob to observe trackpad rotation gestures system-wide.",
+                    description: "Allows Mac Trackpad Fix to observe trackpad gestures system-wide.",
                     isGranted: hasPermission
                 )
 
@@ -49,7 +49,7 @@ public struct OnboardingView: View {
                 if !hasPermission {
                     if didReset {
                         Label(
-                            "Toggle the switch next to TrackpadVolumeKnob in System Settings, then click \"Check Again\".",
+                            "Toggle the switch next to Mac Trackpad Fix in System Settings, then click \"Check Again\".",
                             systemImage: "arrow.counterclockwise.circle.fill"
                         )
                         .font(.callout)

@@ -1,21 +1,21 @@
 // swift-tools-version: 6.0
-// TrackpadVolumeKnob — lightweight macOS menu bar app
-// Rotate two fingers on the trackpad to control system volume.
+// Mac Trackpad Fix — lightweight macOS menu bar app
+// Use trackpad gestures (rotate, pinch) to control system volume and brightness.
 import PackageDescription
 
 let package = Package(
-    name: "TrackpadVolumeKnob",
+    name: "MacTrackpadFix",
     platforms: [
         .macOS(.v14)
     ],
     products: [
         .executable(
-            name: "TrackpadVolumeKnob",
-            targets: ["TrackpadVolumeKnobApp"]
+            name: "MacTrackpadFix",
+            targets: ["MacTrackpadFixApp"]
         ),
         .library(
-            name: "TrackpadVolumeKnobCore",
-            targets: ["TrackpadVolumeKnobCore"]
+            name: "MacTrackpadFixCore",
+            targets: ["MacTrackpadFixCore"]
         ),
         .executable(
             name: "GestureTest",
@@ -28,20 +28,20 @@ let package = Package(
     targets: [
         // Thin executable — just the entry point
         .executableTarget(
-            name: "TrackpadVolumeKnobApp",
+            name: "MacTrackpadFixApp",
             dependencies: [
-                "TrackpadVolumeKnobCore",
+                "MacTrackpadFixCore",
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
-            path: "TrackpadVolumeKnob/App",
+            path: "MacTrackpadFix/App",
             swiftSettings: [
                 .swiftLanguageMode(.v6)
             ]
         ),
         // All logic lives here — importable by tests
         .target(
-            name: "TrackpadVolumeKnobCore",
-            path: "TrackpadVolumeKnob/Sources",
+            name: "MacTrackpadFixCore",
+            path: "MacTrackpadFix/Sources",
             swiftSettings: [
                 // Swift 5 language mode: relaxes strict concurrency checks while
                 // keeping Swift 6 toolchain features. FlingEngine uses GCD timers
@@ -51,9 +51,9 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "TrackpadVolumeKnobTests",
-            dependencies: ["TrackpadVolumeKnobCore"],
-            path: "TrackpadVolumeKnobTests"
+            name: "MacTrackpadFixTests",
+            dependencies: ["MacTrackpadFixCore"],
+            path: "MacTrackpadFixTests"
         ),
         .executableTarget(
             name: "GestureTest",

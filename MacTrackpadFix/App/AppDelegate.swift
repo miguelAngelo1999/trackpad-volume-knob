@@ -2,7 +2,7 @@
 // Root coordinator: owns the menu bar item, gesture pipeline, and window lifecycle.
 import AppKit
 import SwiftUI
-import TrackpadVolumeKnobCore
+import MacTrackpadFixCore
 import Sparkle
 
 @MainActor
@@ -71,7 +71,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         if let button = statusItem?.button {
             button.image = NSImage(
                 systemSymbolName: "speaker.wave.2.circle",
-                accessibilityDescription: "TrackpadVolumeKnob"
+                accessibilityDescription: "Mac Trackpad Fix"
             )
             button.target = self
         }
@@ -82,7 +82,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
 
-        let header = NSMenuItem(title: "TrackpadVolumeKnob", action: nil, keyEquivalent: "")
+        let header = NSMenuItem(title: "Mac Trackpad Fix", action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
         menu.addItem(.separator())
@@ -116,7 +116,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(
-            title: "Quit TrackpadVolumeKnob",
+            title: "Quit Mac Trackpad Fix",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
@@ -161,7 +161,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         })
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Welcome to TrackpadVolumeKnob"
+        window.title = "Welcome to Mac Trackpad Fix"
         window.setContentSize(NSSize(width: 520, height: 440))
         window.styleMask = NSWindow.StyleMask([.titled, .closable])
         window.center()

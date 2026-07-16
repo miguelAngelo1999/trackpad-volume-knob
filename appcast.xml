@@ -1,10 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
   <channel>
-    <title>TrackpadVolumeKnob Updates</title>
+    <title>Mac Trackpad Fix Updates</title>
     <link>https://github.com/miguelAngelo1999/trackpad-volume-knob</link>
-    <description>Most recent updates to TrackpadVolumeKnob</description>
+    <description>Most recent updates to Mac Trackpad Fix</description>
     <language>en</language>
+
+    <item>
+      <title>Version 2.0.0</title>
+      <pubDate>Wed, 15 Jul 2026 12:00:00 +0000</pubDate>
+      <sparkle:version>3</sparkle:version>
+      <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>Mac Trackpad Fix 2.0</h2>
+        <p>TrackpadVolumeKnob has been renamed to <strong>Mac Trackpad Fix</strong> — same app, better name.</p>
+        <ul>
+          <li><strong>Renamed</strong> to Mac Trackpad Fix</li>
+          <li><strong>New icon</strong> — trackpad with rotation arrows</li>
+          <li>All existing settings and preferences are preserved</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/miguelAngelo1999/trackpad-volume-knob/releases/download/v2.0.0/MacTrackpadFix-2.0.0.zip"
+        length="4849491"
+        type="application/octet-stream"
+        sparkle:edSignature="M46YRY67vEHC53jDgAzKjKRNQ4zWkXEAAd0WWEAzDNbvIwVD4qAECVN5zns2KbFu7phhCLn7I7q6GdLXD6PrAw=="
+      />
+    </item>
 
     <item>
       <title>Version 1.1.0</title>
@@ -22,7 +45,7 @@
         </ul>
       ]]></description>
       <enclosure
-        url="https://github.com/miguelAngelo1999/trackpad-volume-knob/releases/download/v1.1.0/TrackpadVolumeKnob-1.1.0.zip"
+        url="https://github.com/miguelAngelo1999/trackpad-volume-knob/releases/download/v1.1.0/MacTrackpadFix-1.1.0.zip"
         length="2954123"
         type="application/octet-stream"
         sparkle:edSignature="SIGN_BY_RUNNING_scripts/sign_release.sh_1.1.0"
@@ -47,7 +70,7 @@
         </ul>
       ]]></description>
       <enclosure
-        url="https://github.com/miguelAngelo1999/trackpad-volume-knob/releases/download/v1.0.0/TrackpadVolumeKnob-1.0.0.zip"
+        url="https://github.com/miguelAngelo1999/trackpad-volume-knob/releases/download/v1.0.0/MacTrackpadFix-1.0.0.zip"
         length="0"
         type="application/octet-stream"
         sparkle:edSignature="REPLACE_WITH_ED25519_SIGNATURE"

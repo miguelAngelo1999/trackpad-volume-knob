@@ -1,5 +1,5 @@
 // PermissionsManager.swift
-// Checks and requests the Accessibility permission required by TrackpadVolumeKnob.
+// Checks and requests the Accessibility permission required by Mac Trackpad Fix.
 import AppKit
 import ApplicationServices
 

@@ -14,6 +14,9 @@ DerivedData/
 # Build artifacts
 TrackpadVolumeKnob.app/
 TrackpadVolumeKnob.dmg
+MacTrackpadFix.app/
+*.zip
+*.dmg
 *.icns
 icon.iconset/
 

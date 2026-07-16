@@ -214,7 +214,7 @@ private struct AudioTab: View {
     var body: some View {
         Form {
             Section("Output Device") {
-                Text("TrackpadVolumeKnob controls the macOS default output device.")
+                Text("Mac Trackpad Fix controls the macOS default output device.")
                     .foregroundStyle(.secondary)
                 Text("This includes built-in speakers, AirPods, Bluetooth headphones, USB DACs, and anything else set as default in System Settings › Sound.")
                     .font(.caption)

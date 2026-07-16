@@ -8,22 +8,22 @@
 
     <!-- App identity -->
     <key>CFBundleName</key>
-    <string>TrackpadVolumeKnob</string>
+    <string>Mac Trackpad Fix</string>
 
     <key>CFBundleDisplayName</key>
-    <string>TrackpadVolumeKnob</string>
+    <string>Mac Trackpad Fix</string>
 
     <key>CFBundleIdentifier</key>
     <string>com.trackpadvolumeknob</string>
 
     <key>CFBundleVersion</key>
-    <string>2</string>
+    <string>3</string>
 
     <key>CFBundleShortVersionString</key>
-    <string>1.1.0</string>
+    <string>2.0.0</string>
 
     <key>CFBundleExecutable</key>
-    <string>TrackpadVolumeKnob</string>
+    <string>MacTrackpadFix</string>
 
     <key>CFBundlePackageType</key>
     <string>APPL</string>
@@ -38,7 +38,7 @@
 
     <!-- Accessibility permission usage description (shown in System Settings) -->
     <key>NSAccessibilityUsageDescription</key>
-    <string>TrackpadVolumeKnob needs Accessibility access to observe trackpad rotation gestures system-wide and adjust your volume.</string>
+    <string>Mac Trackpad Fix needs Accessibility access to observe trackpad gestures system-wide and adjust your volume and brightness.</string>
 
     <!-- High-resolution display support -->
     <key>NSHighResolutionCapable</key>

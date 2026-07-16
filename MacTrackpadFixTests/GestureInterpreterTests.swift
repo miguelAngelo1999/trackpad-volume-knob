@@ -4,7 +4,7 @@
 // touching real hardware.
 
 import Testing
-@testable import TrackpadVolumeKnobCore
+@testable import MacTrackpadFixCore
 import AppKit
 
 // MARK: - Stubs
