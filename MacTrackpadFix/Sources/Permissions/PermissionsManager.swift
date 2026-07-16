@@ -42,9 +42,15 @@ public enum PermissionsManager {
     /// hasAccessibilityPermission() until it returns true.
     public static func resetAndRequestPermission() {
         resetAccessibilityTrust()
-        // Small delay so tccutil finishes before Settings opens
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            openAccessibilitySettings()
+        // Small delay so tccutil finishes, then prompt — this re-adds the app
+        // to the accessibility list so the user just flips the toggle.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            // Calling with prompt:true adds the app back to the TCC list
+            // and shows the system dialog (which we then dismiss by opening Settings).
+            requestAccessibilityPermission(showPrompt: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                openAccessibilitySettings()
+            }
         }
     }
 }
