@@ -22,6 +22,11 @@ private enum DefaultsKey {
     static let autoCheckUpdates    = "autoCheckUpdates"
     static let pinchEnabled        = "pinchEnabled"
     static let pinchTarget         = "pinchTarget"
+    static let hoverScrollEnabled  = "hoverScrollEnabled"
+    static let hoverScrollTarget   = "hoverScrollTarget"
+    static let customActionIncreaseScript = "customActionIncreaseScript"
+    static let customActionDecreaseScript = "customActionDecreaseScript"
+    static let appProfiles         = "appProfiles"
 }
 
 // MARK: - Known apps that use the rotation gesture natively.
@@ -46,8 +51,11 @@ public let defaultExcludedBundleIDs: [String] = [
     "com.pixelmator.pixelmator",         // Pixelmator
     "com.bohemiancoding.sketch3",        // Sketch
     "com.figma.Desktop",                 // Figma
-    "com.google.Chrome",                 // Chrome (maps/web apps)
+    "com.google.Chrome",                 // Chrome (stable, beta, dev, canary — prefix match)
+    "org.chromium.Chromium",             // Chromium
+    "company.thebrowser.Browser",        // Arc browser
     "org.mozilla.firefox",               // Firefox
+    "org.mozilla.nightly",               // Firefox Nightly
     "com.apple.Safari",                  // Safari (web maps)
 ]
 
@@ -65,9 +73,10 @@ public enum HapticLevel: String, CaseIterable, Identifiable {
 }
 
 /// What the pinch gesture controls.
-public enum PinchTarget: String, CaseIterable, Identifiable {
+public enum PinchTarget: String, CaseIterable, Identifiable, Codable {
     case brightness = "Brightness"
     case volume     = "Volume"
+    case customAction = "Custom Action"
     public var id: String { rawValue }
 }
 
@@ -89,9 +98,10 @@ public enum FallbackModifier: String, CaseIterable, Identifiable {
 }
 
 /// What the rotation gesture controls.
-public enum GestureTarget: String, CaseIterable, Identifiable {
+public enum GestureTarget: String, CaseIterable, Identifiable, Codable {
     case volume     = "Volume"
     case brightness = "Brightness"
+    case customAction = "Custom Action"
 
     public var id: String { rawValue }
 }
@@ -188,9 +198,32 @@ public final class AppSettings: ObservableObject {
         didSet { saveExcludedBundleIDs() }
     }
 
+    @Published public var hoverScrollEnabled: Bool {
+        didSet { defaults.set(hoverScrollEnabled, forKey: DefaultsKey.hoverScrollEnabled) }
+    }
+
+    @Published public var hoverScrollTarget: GestureTarget {
+        didSet { defaults.set(hoverScrollTarget.rawValue, forKey: DefaultsKey.hoverScrollTarget) }
+    }
+
+    @Published public var customActionIncreaseScript: String {
+        didSet { defaults.set(customActionIncreaseScript, forKey: DefaultsKey.customActionIncreaseScript) }
+    }
+
+    @Published public var customActionDecreaseScript: String {
+        didSet { defaults.set(customActionDecreaseScript, forKey: DefaultsKey.customActionDecreaseScript) }
+    }
+
+    @Published public var appProfiles: [AppProfile] {
+        didSet { saveAppProfiles() }
+    }
+
     /// Returns true if the given bundle ID should be excluded from gesture handling.
+    /// Supports prefix matching: "com.google.Chrome" matches "com.google.Chrome.beta" etc.
     public func isExcluded(_ bundleID: String) -> Bool {
-        excludedBundleIDs.contains(bundleID)
+        excludedBundleIDs.contains { excluded in
+            bundleID == excluded || bundleID.hasPrefix(excluded + ".")
+        }
     }
 
     public func addExclusion(_ bundleID: String) {
@@ -227,7 +260,11 @@ public final class AppSettings: ObservableObject {
             DefaultsKey.hapticLevel:        HapticLevel.medium.rawValue,
             DefaultsKey.autoCheckUpdates:   true,
             DefaultsKey.pinchEnabled:       true,
-            DefaultsKey.pinchTarget:        PinchTarget.brightness.rawValue
+            DefaultsKey.pinchTarget:        PinchTarget.brightness.rawValue,
+            DefaultsKey.hoverScrollEnabled: false,
+            DefaultsKey.hoverScrollTarget:  GestureTarget.volume.rawValue,
+            DefaultsKey.customActionIncreaseScript: "display dialog \"Increase\"",
+            DefaultsKey.customActionDecreaseScript: "display dialog \"Decrease\""
         ])
 
         sensitivity       = defaults.double(forKey: DefaultsKey.sensitivity)
@@ -260,6 +297,24 @@ public final class AppSettings: ObservableObject {
             rawValue: defaults.string(forKey: DefaultsKey.pinchTarget) ?? ""
         ) ?? .brightness
 
+        hoverScrollEnabled = defaults.bool(forKey: DefaultsKey.hoverScrollEnabled)
+        hoverScrollTarget = GestureTarget(
+            rawValue: defaults.string(forKey: DefaultsKey.hoverScrollTarget) ?? ""
+        ) ?? .volume
+        customActionIncreaseScript = defaults.string(forKey: DefaultsKey.customActionIncreaseScript) ?? ""
+        customActionDecreaseScript = defaults.string(forKey: DefaultsKey.customActionDecreaseScript) ?? ""
+
+        // Load app profiles
+        if let data = defaults.data(forKey: DefaultsKey.appProfiles),
+           let saved = try? JSONDecoder().decode([AppProfile].self, from: data) {
+            appProfiles = saved
+        } else {
+            // Default profile for demonstration
+            appProfiles = [
+                AppProfile(bundleIdentifier: "com.apple.Safari", rotationTarget: .brightness, pinchTarget: .volume)
+            ]
+        }
+
         // Load excluded bundle IDs — fall back to the built-in preset on first launch.
         if let data = defaults.data(forKey: DefaultsKey.excludedBundleIDs),
            let saved = try? JSONDecoder().decode([String].self, from: data) {
@@ -272,6 +327,12 @@ public final class AppSettings: ObservableObject {
     private func saveExcludedBundleIDs() {
         if let data = try? JSONEncoder().encode(excludedBundleIDs) {
             defaults.set(data, forKey: DefaultsKey.excludedBundleIDs)
+        }
+    }
+
+    private func saveAppProfiles() {
+        if let data = try? JSONEncoder().encode(appProfiles) {
+            defaults.set(data, forKey: DefaultsKey.appProfiles)
         }
     }
 
