@@ -75,6 +75,7 @@ public final class GestureEngine {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var isRunning = false
+    private var tapWatchdog: DispatchSourceTimer?
 
     public init(settings: AppSettings, interpreter: GestureInterpreter) {
         self.settings = settings
@@ -95,14 +96,13 @@ public final class GestureEngine {
         // Global monitor: fires when OTHER apps are frontmost (the common case).
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] event in
             guard let self else { return }
-            Task { @MainActor in self.handle(event) }
+            DispatchQueue.main.async { self.handle(event) }
         }
 
         // Local monitor: fires when OUR app is the event target.
-        // Needed if the user somehow activates our app window (e.g. settings window).
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
             guard let self else { return event }
-            Task { @MainActor in self.handle(event) }
+            DispatchQueue.main.async { self.handle(event) }
             return event
         }
 
@@ -112,6 +112,7 @@ public final class GestureEngine {
 
         isRunning = true
         Logger.info("GestureEngine: started (global + local monitors + CGEventTap).")
+        startTapWatchdog()
     }
 
     public func stop() {
@@ -130,7 +131,30 @@ public final class GestureEngine {
         }
 
         isRunning = false
+        stopTapWatchdog()
         Logger.info("GestureEngine: stopped.")
+    }
+
+    // MARK: - Tap Watchdog
+    // macOS can silently disable CGEventTaps. Check every 5s and re-enable if needed.
+
+    private func startTapWatchdog() {
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + 5, repeating: 5)
+        timer.setEventHandler { [weak self] in
+            guard let self, let tap = self.eventTap else { return }
+            if !CGEvent.tapIsEnabled(tap: tap) {
+                Logger.warning("GestureEngine: CGEventTap was disabled — re-enabling.")
+                CGEvent.tapEnable(tap: tap, enable: true)
+            }
+        }
+        timer.resume()
+        tapWatchdog = timer
+    }
+
+    private func stopTapWatchdog() {
+        tapWatchdog?.cancel()
+        tapWatchdog = nil
     }
 
     // MARK: - CGEventTap
@@ -151,11 +175,13 @@ public final class GestureEngine {
                 }
                 let engine = Unmanaged<GestureEngine>.fromOpaque(userInfo).takeUnretainedValue()
                 // Wrap in NSEvent to read .rotation / .magnification
+                // Use DispatchQueue.main.async (not Task) to avoid Swift concurrency
+                // task pile-up that can cause macOS to silently disable the tap.
                 if let nsEvent = NSEvent(cgEvent: cgEvent) {
                     if nsEvent.type == .rotate {
-                        Task { @MainActor in engine.handle(nsEvent) }
+                        DispatchQueue.main.async { engine.handle(nsEvent) }
                     } else if nsEvent.type == .magnify {
-                        Task { @MainActor in engine.handlePinch(nsEvent) }
+                        DispatchQueue.main.async { engine.handlePinch(nsEvent) }
                     }
                 }
                 return Unmanaged.passRetained(cgEvent)

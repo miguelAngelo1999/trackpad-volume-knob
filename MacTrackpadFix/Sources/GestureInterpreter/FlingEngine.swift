@@ -45,11 +45,14 @@ final class FlingEngine {
 
     // MARK: - Fling state
 
-    private var flingVelocity: Double = 0      // current speed, deg/s — written on CVDisplayLink thread, read on main
+    private var flingVelocity: Double = 0
     private var flingSign: Double = 1.0
     private var displayLink: CVDisplayLink?
     private var flingSource: DispatchSourceUserDataAdd?
     private var flingCallback: ((Double) -> Void)?
+    // Generation counter prevents stale CVDisplayLink callbacks from firing
+    // after stopFling() when the display link thread hasn't stopped yet.
+    private var generation: Int = 0
 
     // MARK: - Public API (call from main thread)
 
@@ -97,10 +100,9 @@ final class FlingEngine {
         flingSign     = sign
         flingVelocity = exitSpeed
         flingCallback = callback
+        generation   += 1
+        let myGeneration = generation
 
-        // DispatchSourceUserDataAdd on the main queue — coalesces signals so we
-        // get exactly one handler call per main-queue drain, even if CVDisplayLink
-        // fires multiple times before the main thread wakes up.
         let source = DispatchSource.makeUserDataAddSource(queue: .main)
         flingSource = source
 
@@ -110,6 +112,8 @@ final class FlingEngine {
 
         source.setEventHandler { [weak self] in
             guard let self, let cb = self.flingCallback else { return }
+            // Stale generation means stopFling() was called — discard.
+            guard self.generation == myGeneration else { return }
 
             // Each coalesced signal represents one CVDisplayLink tick at ~dt.
             // data() gives the number of accumulated ticks; use it to step the
@@ -150,7 +154,6 @@ final class FlingEngine {
             src.add(data: 1)
             return kCVReturnSuccess
         }, sourceRef.toOpaque())
-
         CVDisplayLinkStart(link)
         displayLink = link
 
