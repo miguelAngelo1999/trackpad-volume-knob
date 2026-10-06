@@ -133,6 +133,30 @@ public final class GestureEngine {
         isRunning = true
         Logger.info("GestureEngine: started (global + local monitors + CGEventTap).")
         startTapWatchdog()
+
+        // Stop any running fling when display sleeps — CVDisplayLink
+        // can crash if it fires after display invalidation.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleDisplaySleep),
+            name: NSWorkspace.screensDidSleepNotification,
+            object: nil
+        )
+    }
+
+    @objc private func handleDisplaySleep() {
+        resetGestureState()
+        Logger.info("GestureEngine: display slept — fling + gesture state reset.")
+    }
+
+    /// Resets in-flight gesture state and stops any running fling.
+    /// Safe to call from any context (sleep, screen lock, app switching).
+    public func resetGestureState() {
+        gestureLock = .none
+        pendingRotationDeg = 0
+        pendingMagAbs = 0
+        cachedFrontmostID = nil
+        cachedFrontmostTime = 0
     }
 
     public func stop() {
@@ -230,9 +254,7 @@ public final class GestureEngine {
 
     private func handle(_ event: NSEvent) {
         // Exclusion list: pass through to apps that use rotation natively.
-        if let frontmost = NSWorkspace.shared.frontmostApplication,
-           let bid = frontmost.bundleIdentifier,
-           settings.isExcluded(bid) {
+        if let bid = frontmostBundleID(), settings.isExcluded(bid) {
             if settings.debugLogging {
                 Logger.debug("GestureEngine: skipping — \(bid) is excluded")
             }
@@ -300,9 +322,7 @@ public final class GestureEngine {
         guard settings.pinchEnabled else { return }
 
         // Exclusion list
-        if let frontmost = NSWorkspace.shared.frontmostApplication,
-           let bid = frontmost.bundleIdentifier,
-           settings.isExcluded(bid) { return }
+        if let bid = frontmostBundleID(), settings.isExcluded(bid) { return }
 
         let mag = Double(event.magnification)
 
@@ -362,6 +382,23 @@ public final class GestureEngine {
             timestamp: event.timestamp,
             phase: event.phase
         ))
+    }
+
+    // Frontmost app cache — NSWorkspace.frontmostApplication is an XPC call.
+    // Calling it 50+ times/sec during rotation creates a backlog of objects.
+    // Cache with a 150ms TTL so we check at most ~7 times/sec.
+    private var cachedFrontmostID: String? = nil
+    private var cachedFrontmostTime: CFTimeInterval = 0
+    private let frontmostCacheTTL: CFTimeInterval = 0.15
+
+    private func frontmostBundleID() -> String? {
+        let now = CACurrentMediaTime()
+        if now - cachedFrontmostTime < frontmostCacheTTL {
+            return cachedFrontmostID
+        }
+        cachedFrontmostID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        cachedFrontmostTime = now
+        return cachedFrontmostID
     }
 
     private func isFallbackModifierDown() -> Bool {

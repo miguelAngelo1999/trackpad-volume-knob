@@ -4,7 +4,6 @@ import AppKit
 import SwiftUI
 import MacTrackpadFixCore
 import Sparkle
-import CommonCrypto
 
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -18,6 +17,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
     private(set) var updaterManager: UpdaterManager!
+    private var scrollEventMonitor: Any?
     // MARK: - App lifecycle
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
@@ -68,6 +68,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         gestureEngine?.stop()
     }
 
+    public func applicationWillResignActive(_ notification: Notification) {
+        // Nothing — we want gestures to work even when not active
+    }
+
+    // Stop fling and reset gesture state on sleep/lock to prevent
+    // CVDisplayLink running against an invalid display after wake.
+    public func applicationWillHide(_ notification: Notification) {
+        gestureEngine?.resetGestureState()
+    }
+
     // MARK: - Status item
 
     private func setupStatusItem() {
@@ -82,6 +92,33 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         statusItem?.menu = buildMenu()
+
+        scrollEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self = self, AppSettings.shared.hoverScrollEnabled else { return event }
+            guard let button = self.statusItem?.button, let window = button.window else { return event }
+            
+            let mouseLoc = NSEvent.mouseLocation
+            if window.frame.contains(mouseLoc) {
+                self.handleHoverScroll(event)
+                return nil
+            }
+            return event
+        }
+    }
+
+    private func handleHoverScroll(_ event: NSEvent) {
+        let delta = Float(event.scrollingDeltaY) * 0.05
+        guard abs(delta) > 0.001 else { return }
+
+        let target = AppSettings.shared.hoverScrollTarget
+        switch target {
+        case .volume:
+            self.volumeController?.adjustVolume(by: delta)
+            self.volumeController?.showHUD(increasing: delta > 0)
+        case .brightness:
+            BrightnessController.shared.adjustBrightness(by: delta)
+        default: break
+        }
     }
 
     private func buildMenu() -> NSMenu {
@@ -192,29 +229,21 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Post-update TCC reset
 
-    /// Detects first launch after a binary change (checksum-based, not version-based)
+    /// Detects first launch after a binary change via modification date (not SHA256)
     /// and resets the stale TCC entry so the user only needs to flip the toggle.
     private func handlePostUpdateTCCReset() {
         guard let executableURL = Bundle.main.executableURL else { return }
 
-        // Hash the executable binary
-        let currentHash = sha256(of: executableURL)
-        let lastHash = UserDefaults.standard.string(forKey: "LastLaunchedBinaryHash") ?? ""
+        // Use file modification date — fast, no binary read, no SHA256
+        let mtime = (try? FileManager.default.attributesOfItem(atPath: executableURL.path))?[.modificationDate] as? Date
+        let currentKey = mtime.map { String(Int($0.timeIntervalSince1970)) } ?? ""
+        let lastKey = UserDefaults.standard.string(forKey: "LastLaunchedBinaryMtime") ?? ""
 
-        if currentHash != lastHash {
+        if currentKey != lastKey {
             PermissionsManager.resetAccessibilityTrust()
-            if !currentHash.isEmpty {
-                UserDefaults.standard.set(currentHash, forKey: "LastLaunchedBinaryHash")
+            if !currentKey.isEmpty {
+                UserDefaults.standard.set(currentKey, forKey: "LastLaunchedBinaryMtime")
             }
         }
-    }
-
-    private func sha256(of url: URL) -> String {
-        guard let data = try? Data(contentsOf: url) else { return "" }
-        var hash = [UInt8](repeating: 0, count: 32)
-        data.withUnsafeBytes { buffer in
-            _ = CC_SHA256(buffer.baseAddress, CC_LONG(data.count), &hash)
-        }
-        return hash.map { String(format: "%02x", $0) }.joined()
     }
 }
