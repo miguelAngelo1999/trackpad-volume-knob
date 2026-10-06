@@ -142,11 +142,26 @@ public final class GestureEngine {
             name: NSWorkspace.screensDidSleepNotification,
             object: nil
         )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleDisplayWake),
+            name: NSWorkspace.screensDidWakeNotification,
+            object: nil
+        )
     }
 
     @objc private func handleDisplaySleep() {
         resetGestureState()
-        Logger.info("GestureEngine: display slept — fling + gesture state reset.")
+        Logger.info("GestureEngine: display slept — gesture state reset.")
+    }
+
+    @objc private func handleDisplayWake() {
+        // Re-enable the tap immediately after wake — macOS sometimes disables it
+        // during sleep and the 0.5s watchdog catches it, but this makes it instant.
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: true)
+        }
+        Logger.info("GestureEngine: display woke — tap re-enabled.")
     }
 
     /// Resets in-flight gesture state and stops any running fling.
@@ -187,7 +202,9 @@ public final class GestureEngine {
 
     private func startTapWatchdog() {
         let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + 5, repeating: 5)
+        // 0.5s interval — tight enough that unresponsive gaps feel instant,
+        // not the 5s gaps users notice.
+        timer.schedule(deadline: .now() + 0.5, repeating: 0.5)
         timer.setEventHandler { [weak self] in
             guard let self, let tap = self.eventTap else { return }
             if !CGEvent.tapIsEnabled(tap: tap) {
