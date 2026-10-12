@@ -6,6 +6,7 @@ public struct OnboardingView: View {
 
     @State private var hasPermission = false
     @State private var isPolling = false
+    @State private var launchAtLogin = LaunchAtLoginManager.isEnabled
 
     public init(onComplete: @escaping () -> Void) {
         self.onComplete = onComplete
@@ -33,25 +34,51 @@ public struct OnboardingView: View {
 
             Divider()
 
-            // Permission row
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Required Permission")
-                    .font(.headline)
+            VStack(alignment: .leading, spacing: 16) {
+                // Permission row
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Required Permission")
+                        .font(.headline)
 
-                PermissionRow(
-                    title: "Accessibility",
-                    description: "Allows Mac Trackpad Fix to observe trackpad gestures system-wide.",
-                    isGranted: hasPermission
-                )
-
-                if !hasPermission {
-                    Label(
-                        "Enable Mac Trackpad Fix in System Settings, then click \"Check Again\".",
-                        systemImage: "info.circle"
+                    PermissionRow(
+                        title: "Accessibility",
+                        description: "Allows Mac Trackpad Fix to observe trackpad gestures system-wide.",
+                        isGranted: hasPermission
                     )
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+
+                    if !hasPermission {
+                        Label(
+                            "Enable Mac Trackpad Fix in System Settings, then this window will automatically continue.",
+                            systemImage: "info.circle"
+                        )
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Divider()
+
+                // Launch at login
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Startup")
+                        .font(.headline)
+
+                    Toggle(isOn: $launchAtLogin) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Launch at login")
+                                .font(.body)
+                            Text("Start automatically when you log in.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .onChange(of: launchAtLogin) { _, newValue in
+                        LaunchAtLoginManager.setEnabled(newValue)
+                        AppSettings.shared.launchAtLogin = newValue
+                    }
+                    .padding(14)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             }
             .padding(24)
@@ -82,8 +109,6 @@ public struct OnboardingView: View {
         .onAppear {
             checkPermission()
             if !hasPermission {
-                // Register the app in the TCC list silently (no dialog)
-                // so it appears in System Settings ready to be toggled on.
                 PermissionsManager.requestAccessibilityPermission(showPrompt: false)
                 startPolling()
             }
@@ -100,7 +125,15 @@ public struct OnboardingView: View {
         Task {
             while !hasPermission {
                 try? await Task.sleep(for: .seconds(1))
-                hasPermission = PermissionsManager.hasAccessibilityPermission()
+                let granted = PermissionsManager.hasAccessibilityPermission()
+                if granted {
+                    hasPermission = true
+                    // Bring the app window back to front so the user
+                    // sees the "Get Started" button without switching back manually.
+                    await MainActor.run {
+                        NSApp.activate(ignoringOtherApps: true)
+                    }
+                }
             }
             isPolling = false
         }
