@@ -1,6 +1,12 @@
 // OnboardingView.swift — first-run and re-authorization permissions screen.
 import SwiftUI
 
+/// Fired when the polling loop detects accessibility permission was granted.
+/// AppDelegate observes this and brings the window to front.
+extension Notification.Name {
+    public static let accessibilityPermissionGranted = Notification.Name("accessibilityPermissionGranted")
+}
+
 public struct OnboardingView: View {
     public var onComplete: () -> Void
 
@@ -13,9 +19,9 @@ public struct OnboardingView: View {
     }
 
     public var body: some View {
-        ScrollView {
         VStack(spacing: 0) {
-            // Header
+
+            // MARK: Header
             VStack(spacing: 12) {
                 Image(systemName: "hand.draw.fill")
                     .font(.system(size: 52))
@@ -25,68 +31,70 @@ public struct OnboardingView: View {
                 Text("Mac Trackpad Fix")
                     .font(.title2.bold())
 
-                Text("Use rotate and pinch gestures on your trackpad to control volume and brightness.")
+                Text("Use rotate and pinch gestures on your trackpad\nto control volume and brightness.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal)
             }
             .padding(.top, 32)
             .padding(.bottom, 24)
+            .padding(.horizontal, 24)
 
             Divider()
 
-            VStack(alignment: .leading, spacing: 16) {
-                // Permission row
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Required Permission")
-                        .font(.headline)
+            // MARK: Accessibility permission
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Required Permission")
+                    .font(.headline)
 
-                    PermissionRow(
-                        title: "Accessibility",
-                        description: "Allows Mac Trackpad Fix to observe trackpad gestures system-wide.",
-                        isGranted: hasPermission
+                PermissionRow(
+                    title: "Accessibility",
+                    description: "Allows Mac Trackpad Fix to observe trackpad gestures system-wide.",
+                    isGranted: hasPermission
+                )
+
+                if !hasPermission {
+                    Label(
+                        "Enable Mac Trackpad Fix in System Settings — this window will return automatically.",
+                        systemImage: "info.circle"
                     )
-
-                    if !hasPermission {
-                        Label(
-                            "Enable Mac Trackpad Fix in System Settings, then this window will automatically continue.",
-                            systemImage: "info.circle"
-                        )
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-
-                Divider()
-
-                // Launch at login
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Startup")
-                        .font(.headline)
-
-                    Toggle(isOn: $launchAtLogin) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Launch at login")
-                                .font(.body)
-                            Text("Start automatically when you log in.")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .onChange(of: launchAtLogin) { _, newValue in
-                        LaunchAtLoginManager.setEnabled(newValue)
-                        AppSettings.shared.launchAtLogin = newValue
-                    }
-                    .padding(14)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(24)
 
             Divider()
 
-            // Buttons
+            // MARK: Launch at login
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Startup")
+                    .font(.headline)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Launch at login")
+                            .font(.body)
+                        Text("Start Mac Trackpad Fix automatically when you log in.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $launchAtLogin)
+                        .labelsHidden()
+                        .onChange(of: launchAtLogin) { _, newValue in
+                            LaunchAtLoginManager.setEnabled(newValue)
+                            AppSettings.shared.launchAtLogin = newValue
+                        }
+                }
+                .padding(14)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            .padding(24)
+
+            Divider()
+
+            // MARK: Buttons
             if hasPermission {
                 Button("Get Started") { onComplete() }
                     .buttonStyle(.borderedProminent)
@@ -114,7 +122,6 @@ public struct OnboardingView: View {
                 startPolling()
             }
         }
-        } // ScrollView
     }
 
     private func checkPermission() {
@@ -127,13 +134,13 @@ public struct OnboardingView: View {
         Task {
             while !hasPermission {
                 try? await Task.sleep(for: .seconds(1))
-                let granted = PermissionsManager.hasAccessibilityPermission()
-                if granted {
+                if PermissionsManager.hasAccessibilityPermission() {
                     hasPermission = true
-                    // Bring the app window back to front so the user
-                    // sees the "Get Started" button without switching back manually.
-                    await MainActor.run {
-                        NSApp.activate(ignoringOtherApps: true)
+                    // Post notification — AppDelegate handles window focus
+                    // (more reliable than NSApp.activate from within a Task)
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(
+                            name: .accessibilityPermissionGranted, object: nil)
                     }
                 }
             }

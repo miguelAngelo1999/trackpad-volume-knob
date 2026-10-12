@@ -204,17 +204,30 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Welcome to Mac Trackpad Fix"
-        window.setContentSize(NSSize(width: 520, height: 580))
+        window.setContentSize(NSSize(width: 520, height: 680))
         window.styleMask = NSWindow.StyleMask([.titled, .closable])
         window.center()
         window.isReleasedWhenClosed = false
         window.makeKeyAndOrderFront(nil as AnyObject?)
         NSApp.activate(ignoringOtherApps: true)
         onboardingWindow = window
+
+        // When permission is granted in System Settings, refocus this window
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(bringOnboardingToFront),
+            name: .accessibilityPermissionGranted,
+            object: nil
+        )
     }
 
     @objc private func checkForUpdates() {
         updaterManager.checkForUpdates()
+    }
+
+    @objc private func bringOnboardingToFront() {
+        onboardingWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func recheckPermissions() {
