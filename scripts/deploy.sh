@@ -7,7 +7,19 @@ set -e
 WORKSPACE="$(cd "$(dirname "$0")/.." && pwd)"
 APP="/Applications/MacTrackpadFix.app"
 BINARY="$APP/Contents/MacOS/MacTrackpadFix"
-BUILD_BINARY="$WORKSPACE/.build/arm64-apple-macosx/debug/MacTrackpadFix"
+
+# Find the built binary wherever SPM puts it (path changed between toolchain versions)
+BUILD_BINARY=$(find "$WORKSPACE/.build" -name "MacTrackpadFix" -type f \
+    -not -path "*.dSYM*" -not -path "*GestureTest*" \
+    | sort -t/ -k1,1 | tail -1)
+
+if [ -z "$BUILD_BINARY" ]; then
+    echo "ERROR: Could not find MacTrackpadFix binary in .build/"
+    exit 1
+fi
+
+# Derive Sparkle.framework path from the same directory as the binary
+SPARKLE_FRAMEWORK="$(dirname "$BUILD_BINARY")/Sparkle.framework"
 
 echo "→ Building..."
 cd "$WORKSPACE"
@@ -39,7 +51,11 @@ echo "→ Embedding Sparkle.framework..."
 FRAMEWORKS_DIR="$APP/Contents/Frameworks"
 mkdir -p "$FRAMEWORKS_DIR"
 rm -rf "$FRAMEWORKS_DIR/Sparkle.framework"
-cp -R "$WORKSPACE/.build/arm64-apple-macosx/debug/Sparkle.framework" "$FRAMEWORKS_DIR/"
+if [ -d "$SPARKLE_FRAMEWORK" ]; then
+    cp -R "$SPARKLE_FRAMEWORK" "$FRAMEWORKS_DIR/"
+else
+    echo "⚠ Sparkle.framework not found beside binary — skipping"
+fi
 
 echo "→ Ad-hoc signing (stable identity across updates)..."
 install_name_tool -add_rpath @executable_path/../Frameworks "$BINARY" 2>/dev/null || true
