@@ -67,30 +67,27 @@ public struct OnboardingView: View {
             Divider()
 
             // MARK: Launch at login
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Startup")
-                    .font(.headline)
-
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Launch at login")
-                            .font(.body)
-                        Text("Start Mac Trackpad Fix automatically when you log in.")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Toggle("", isOn: $launchAtLogin)
-                        .labelsHidden()
-                        .onChange(of: launchAtLogin) { _, newValue in
-                            LaunchAtLoginManager.setEnabled(newValue)
-                            AppSettings.shared.launchAtLogin = newValue
-                        }
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Launch at login")
+                        .font(.body.bold())
+                    Text("Start Mac Trackpad Fix automatically when you log in.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                 }
-                .padding(14)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Spacer()
+                Toggle("", isOn: $launchAtLogin)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .onChange(of: launchAtLogin) { _, newValue in
+                        LaunchAtLoginManager.setEnabled(newValue)
+                        AppSettings.shared.launchAtLogin = newValue
+                    }
             }
-            .padding(24)
+            .padding(14)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.horizontal, 24)
+            .padding(.bottom, 4)
 
             Divider()
 
