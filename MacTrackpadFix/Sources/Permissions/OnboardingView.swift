@@ -13,6 +13,7 @@ public struct OnboardingView: View {
     }
 
     public var body: some View {
+        ScrollView {
         VStack(spacing: 0) {
             // Header
             VStack(spacing: 12) {
@@ -113,6 +114,7 @@ public struct OnboardingView: View {
                 startPolling()
             }
         }
+        } // ScrollView
     }
 
     private func checkPermission() {

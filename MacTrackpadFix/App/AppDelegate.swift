@@ -204,7 +204,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let hostingController = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Welcome to Mac Trackpad Fix"
-        window.setContentSize(NSSize(width: 520, height: 440))
+        window.setContentSize(NSSize(width: 520, height: 580))
         window.styleMask = NSWindow.StyleMask([.titled, .closable])
         window.center()
         window.isReleasedWhenClosed = false
