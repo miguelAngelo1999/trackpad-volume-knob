@@ -325,14 +325,19 @@ public final class GestureEngine {
                 let elapsed  = event.timestamp - decidingStart
                 let rotScore = pendingRotationDeg / rotNorm
                 let magScore = pendingMagAbs      / magNorm
-                if magScore > rotScore {
-                    if elapsed >= decisionWindowSecs { gestureLock = .pinch }
+                // Only suppress rotation if pinch is MASSIVELY stronger (3x).
+                // A tiny pinch component from natural finger movement should not
+                // block rotation — only a genuine pinch gesture should.
+                if magScore > rotScore * 3.0 && elapsed >= decisionWindowSecs {
+                    gestureLock = .pinch
                     return
                 }
-                if elapsed >= decisionWindowSecs || rotScore > magScore + 0.3 {
+                if elapsed >= decisionWindowSecs || rotScore > magScore + 0.2 {
                     gestureLock = .rotation
                 }
             }
+            // Rotation events always flow through during the window unless
+            // pinch has definitively committed its lock above.
         }
 
         guard degrees != 0 else { return }
