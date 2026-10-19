@@ -91,7 +91,7 @@ public final class GestureEngine {
     private var decidingStart: CFTimeInterval = 0
     private var pendingRotationDeg: Double = 0    // accumulated |°| during window
     private var pendingMagAbs: Double = 0          // accumulated |mag| during window
-    private let decisionWindowSecs: Double = 0.08  // 80 ms
+    private let decisionWindowSecs: Double = 0.04  // 40 ms — shorter window = fewer lost events for fling
     // Normalisation factors: what magnitude constitutes a "full" gesture per type
     private let rotNorm: Double  = 8.0    // 8° = strong rotation signal
     private let magNorm: Double  = 0.06   // 0.06 mag = strong pinch signal

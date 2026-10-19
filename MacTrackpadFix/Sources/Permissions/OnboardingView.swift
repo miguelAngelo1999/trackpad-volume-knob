@@ -100,7 +100,8 @@ public struct OnboardingView: View {
             } else {
                 HStack(spacing: 10) {
                     Button("Open System Settings") {
-                        PermissionsManager.openAccessibilitySettings()
+                        // Reset stale TCC entry THEN open Settings
+                        PermissionsManager.resetAndRequestPermission()
                         startPolling()
                     }
                     .buttonStyle(.borderedProminent)
