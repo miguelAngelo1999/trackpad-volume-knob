@@ -95,8 +95,8 @@ public final class GestureInterpreter: GestureEngineDelegate {
 
         switch lockedTarget {
         case .volume:
-            let increasing = gestureNetDegrees >= 0
-            volumeController.showHUD(increasing: increasing)
+            // Use custom HUDController — OSDManager.showImage: snaps volume to nearest 6.25%
+            hudController.show(volume: volumeController.currentVolume)
         case .brightness:
             break
         case .customAction:
