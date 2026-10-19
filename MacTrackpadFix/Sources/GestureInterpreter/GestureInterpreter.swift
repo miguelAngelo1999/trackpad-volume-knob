@@ -99,6 +99,8 @@ public final class GestureInterpreter: GestureEngineDelegate {
             volumeController.showHUD(increasing: increasing)
         case .brightness:
             break
+        case .customAction:
+            break
         }
 
         let target = lockedTarget
@@ -177,6 +179,8 @@ public final class GestureInterpreter: GestureEngineDelegate {
             hapticEngine.feedback(value: brightnessController.currentBrightness(),
                                   delta: finalDelta, target: .brightness,
                                   level: settings.hapticLevel)
+        case .customAction:
+            break
         }
     }
 
@@ -263,6 +267,8 @@ public final class GestureInterpreter: GestureEngineDelegate {
                 target: .brightness,
                 level: settings.hapticLevel
             )
+        case .customAction:
+            break
         }
     }
 
