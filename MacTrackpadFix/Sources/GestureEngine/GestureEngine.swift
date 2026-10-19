@@ -297,28 +297,24 @@ public final class GestureEngine {
 
         let degrees = Double(event.rotation)
 
-        // --- Symmetric decision window (rotation) ---
-        // Rotation does NOT commit immediately on .began.
-        // Both rotation and pinch accumulate; the one that crosses its
-        // minimum threshold AND has a higher normalised score wins.
-        // rotMinThreshold prevents a tiny accidental rotation during a real
-        // pinch from hijacking the gesture.
+        // Gesture disambiguation: events flow immediately but the losing type
+        // is suppressed once the signal score shows clear dominance.
+        // No dead zone — short fast rotations always work.
         switch event.phase {
         case .began:
-            if gestureLock == .pinch { return }   // pinch already committed
+            if gestureLock == .pinch { return }
             if gestureLock == .none {
                 decidingStart      = event.timestamp
                 pendingRotationDeg = abs(degrees)
                 pendingMagAbs      = 0
-                // Do NOT commit yet — fall through without setting lock
             }
+            delegate?.gestureEngineDidBeginGesture(self)
 
         case .ended, .cancelled:
-            let wasRotating = gestureLock == .rotation || (gestureLock == .none && sentRotationBegan)
+            if gestureLock != .pinch { delegate?.gestureEngineDidEndGesture(self) }
             gestureLock       = .none
             sentRotationBegan = false
             sentPinchBegan    = false
-            if wasRotating { delegate?.gestureEngineDidEndGesture(self) }
             return
 
         default:
@@ -328,26 +324,16 @@ public final class GestureEngine {
                 let elapsed  = event.timestamp - decidingStart
                 let rotScore = pendingRotationDeg / rotNorm
                 let magScore = pendingMagAbs      / magNorm
-                let rotReady = pendingRotationDeg >= rotMinThreshold
-                if rotReady && (rotScore >= magScore || elapsed >= decisionWindowSecs) {
+                // If pinch signal is stronger, suppress this rotation event
+                if magScore > rotScore {
+                    if elapsed >= decisionWindowSecs { gestureLock = .pinch }
+                    return
+                }
+                // Rotation is dominant — commit if clear or window expired
+                if elapsed >= decisionWindowSecs || rotScore > magScore + 0.3 {
                     gestureLock = .rotation
-                } else if elapsed >= decisionWindowSecs {
-                    if magScore > rotScore {
-                        gestureLock = .pinch   // pinch wins
-                        return
-                    } else {
-                        gestureLock = .rotation
-                    }
-                } else {
-                    return  // still deciding
                 }
             }
-        }
-
-        // Send .began once when rotation is first committed
-        if !sentRotationBegan {
-            sentRotationBegan = true
-            delegate?.gestureEngineDidBeginGesture(self)
         }
 
         guard degrees != 0 else { return }
@@ -371,54 +357,44 @@ public final class GestureEngine {
 
         let mag = Double(event.magnification)
 
-        // --- Symmetric decision window (pinch) ---
         switch event.phase {
         case .began:
-            if gestureLock == .rotation { return }  // rotation already committed
+            if gestureLock == .rotation { return }
             if gestureLock == .none {
                 decidingStart      = event.timestamp
                 pendingMagAbs      = abs(mag)
                 pendingRotationDeg = 0
             }
+            delegate?.gestureEngineDidBeginPinch(self)
 
         case .ended, .cancelled:
-            let wasPinching = gestureLock == .pinch || (gestureLock == .none && sentPinchBegan)
+            if gestureLock != .rotation { delegate?.gestureEngineDidEndPinch(self) }
             gestureLock       = .none
             sentRotationBegan = false
             sentPinchBegan    = false
-            if wasPinching { delegate?.gestureEngineDidEndPinch(self) }
             return
 
         default:
             if gestureLock == .rotation { return }
             pendingMagAbs += abs(mag)
-
             if gestureLock == .none {
                 let elapsed  = event.timestamp - decidingStart
                 let rotScore = pendingRotationDeg / rotNorm
                 let magScore = pendingMagAbs      / magNorm
-                let magReady = pendingMagAbs >= pinchMinThreshold
-                if magReady && (magScore > rotScore || elapsed >= decisionWindowSecs) {
+                // If rotation signal is stronger, suppress this pinch event
+                if rotScore > magScore {
+                    if elapsed >= decisionWindowSecs { gestureLock = .rotation }
+                    return
+                }
+                // Pinch is dominant — commit once threshold met
+                if pendingMagAbs >= pinchMinThreshold &&
+                   (elapsed >= decisionWindowSecs || magScore > rotScore + 0.3) {
                     gestureLock = .pinch
-                } else if elapsed >= decisionWindowSecs {
-                    if rotScore >= magScore {
-                        gestureLock = .rotation
-                        return
-                    } else {
-                        gestureLock = .pinch
-                    }
-                } else {
-                    return  // still deciding
+                } else if pendingMagAbs < pinchMinThreshold {
+                    return  // not enough pinch yet
                 }
             }
-
             guard pendingMagAbs >= pinchMinThreshold else { return }
-        }
-
-        // Send .began once when pinch is first committed
-        if !sentPinchBegan {
-            sentPinchBegan = true
-            delegate?.gestureEngineDidBeginPinch(self)
         }
 
         guard mag != 0 else { return }
@@ -433,6 +409,7 @@ public final class GestureEngine {
             phase: event.phase
         ))
     }
+
 
 
     // Frontmost app cache — NSWorkspace.frontmostApplication is an XPC call.
