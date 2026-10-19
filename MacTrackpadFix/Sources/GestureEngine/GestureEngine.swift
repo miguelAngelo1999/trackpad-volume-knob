@@ -297,9 +297,10 @@ public final class GestureEngine {
 
         let degrees = Double(event.rotation)
 
-        // Gesture disambiguation: events flow immediately but the losing type
-        // is suppressed once the signal score shows clear dominance.
-        // No dead zone — short fast rotations always work.
+        // Gesture disambiguation — events flow immediately, no dead zone.
+        // gestureEngineDidBeginGesture is deferred to the first event that
+        // actually flows through (not .began), so the interpreter's
+        // activeGesture is never set incorrectly from an early .began call.
         switch event.phase {
         case .began:
             if gestureLock == .pinch { return }
@@ -308,10 +309,10 @@ public final class GestureEngine {
                 pendingRotationDeg = abs(degrees)
                 pendingMagAbs      = 0
             }
-            delegate?.gestureEngineDidBeginGesture(self)
+            // Do NOT call begin here — defer to first event that flows through
 
         case .ended, .cancelled:
-            if gestureLock != .pinch { delegate?.gestureEngineDidEndGesture(self) }
+            if sentRotationBegan { delegate?.gestureEngineDidEndGesture(self) }
             gestureLock       = .none
             sentRotationBegan = false
             sentPinchBegan    = false
@@ -324,12 +325,10 @@ public final class GestureEngine {
                 let elapsed  = event.timestamp - decidingStart
                 let rotScore = pendingRotationDeg / rotNorm
                 let magScore = pendingMagAbs      / magNorm
-                // If pinch signal is stronger, suppress this rotation event
                 if magScore > rotScore {
                     if elapsed >= decisionWindowSecs { gestureLock = .pinch }
                     return
                 }
-                // Rotation is dominant — commit if clear or window expired
                 if elapsed >= decisionWindowSecs || rotScore > magScore + 0.3 {
                     gestureLock = .rotation
                 }
@@ -337,6 +336,12 @@ public final class GestureEngine {
         }
 
         guard degrees != 0 else { return }
+
+        // Send begin on first rotation event that actually flows through
+        if !sentRotationBegan {
+            sentRotationBegan = true
+            delegate?.gestureEngineDidBeginGesture(self)
+        }
 
         if settings.debugLogging {
             Logger.debug("GestureEngine: rotation \(String(format: "%.3f", degrees))° phase=\(event.phase.rawValue)")
@@ -365,10 +370,10 @@ public final class GestureEngine {
                 pendingMagAbs      = abs(mag)
                 pendingRotationDeg = 0
             }
-            delegate?.gestureEngineDidBeginPinch(self)
+            // Do NOT call begin here — defer to first event that flows through
 
         case .ended, .cancelled:
-            if gestureLock != .rotation { delegate?.gestureEngineDidEndPinch(self) }
+            if sentPinchBegan { delegate?.gestureEngineDidEndPinch(self) }
             gestureLock       = .none
             sentRotationBegan = false
             sentPinchBegan    = false
@@ -381,17 +386,15 @@ public final class GestureEngine {
                 let elapsed  = event.timestamp - decidingStart
                 let rotScore = pendingRotationDeg / rotNorm
                 let magScore = pendingMagAbs      / magNorm
-                // If rotation signal is stronger, suppress this pinch event
                 if rotScore > magScore {
                     if elapsed >= decisionWindowSecs { gestureLock = .rotation }
                     return
                 }
-                // Pinch is dominant — commit once threshold met
                 if pendingMagAbs >= pinchMinThreshold &&
                    (elapsed >= decisionWindowSecs || magScore > rotScore + 0.3) {
                     gestureLock = .pinch
                 } else if pendingMagAbs < pinchMinThreshold {
-                    return  // not enough pinch yet
+                    return
                 }
             }
             guard pendingMagAbs >= pinchMinThreshold else { return }
@@ -399,8 +402,14 @@ public final class GestureEngine {
 
         guard mag != 0 else { return }
 
+        // Send begin on first pinch event that actually flows through
+        if !sentPinchBegan {
+            sentPinchBegan = true
+            delegate?.gestureEngineDidBeginPinch(self)
+        }
+
         if settings.debugLogging {
-            Logger.debug("GestureEngine: pinch \(String(format: "%.4f", mag)) phase=\(event.phase.rawValue) lock=\(gestureLock)")
+            Logger.debug("GestureEngine: pinch \(String(format: "%.4f", mag)) phase=\(event.phase.rawValue)")
         }
 
         delegate?.gestureEngine(self, didReceivePinch: PinchEvent(
@@ -409,8 +418,6 @@ public final class GestureEngine {
             phase: event.phase
         ))
     }
-
-
 
     // Frontmost app cache — NSWorkspace.frontmostApplication is an XPC call.
     // Calling it 50+ times/sec during rotation creates a backlog of objects.
