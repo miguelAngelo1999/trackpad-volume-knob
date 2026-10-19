@@ -39,8 +39,12 @@ final class HapticEngine {
     private var brightnessLastTick: TimeInterval = 0
     private var brightnessLastValue: Float = -1
 
-    private let performer: NSHapticFeedbackPerformer? =
+    // Computed so it is fetched fresh on each use — the stored-let approach
+    // captures nil at init time (before the app run loop is ready) and
+    // stays nil permanently even on supported hardware.
+    private var performer: NSHapticFeedbackPerformer? {
         NSHapticFeedbackManager.defaultPerformer
+    }
 
     // MARK: - Public API
 

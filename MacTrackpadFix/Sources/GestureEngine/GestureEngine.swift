@@ -95,7 +95,11 @@ public final class GestureEngine {
     // Normalisation factors: what magnitude constitutes a "full" gesture per type
     private let rotNorm: Double  = 8.0    // 8° = strong rotation signal
     private let magNorm: Double  = 0.06   // 0.06 mag = strong pinch signal
-    private let pinchMinThreshold: Double = 0.015  // must accumulate this much before acting
+    private let pinchMinThreshold: Double = 0.015  // min pinch mag before acting
+    private let rotMinThreshold:   Double = 3.0    // min rotation degrees before committing
+    // Track whether we already sent .began to the delegate for each type
+    private var sentRotationBegan: Bool = false
+    private var sentPinchBegan:    Bool = false
 
     public init(settings: AppSettings, interpreter: GestureInterpreter) {
         self.settings = settings
@@ -170,6 +174,8 @@ public final class GestureEngine {
         gestureLock = .none
         pendingRotationDeg = 0
         pendingMagAbs = 0
+        sentRotationBegan = false
+        sentPinchBegan = false
         cachedFrontmostID = nil
         cachedFrontmostTime = 0
     }
@@ -291,35 +297,57 @@ public final class GestureEngine {
 
         let degrees = Double(event.rotation)
 
-        // --- Gesture mutex + decision window ---
+        // --- Symmetric decision window (rotation) ---
+        // Rotation does NOT commit immediately on .began.
+        // Both rotation and pinch accumulate; the one that crosses its
+        // minimum threshold AND has a higher normalised score wins.
+        // rotMinThreshold prevents a tiny accidental rotation during a real
+        // pinch from hijacking the gesture.
         switch event.phase {
         case .began:
+            if gestureLock == .pinch { return }   // pinch already committed
             if gestureLock == .none {
-                // Start decision window — don't commit yet
-                decidingStart  = event.timestamp
+                decidingStart      = event.timestamp
                 pendingRotationDeg = abs(degrees)
-                pendingMagAbs  = 0
+                pendingMagAbs      = 0
+                // Do NOT commit yet — fall through without setting lock
             }
-            if gestureLock == .pinch { return }   // pinch won the window — ignore rotation
-            if gestureLock == .none  { /* deciding — fall through to send .began */ }
-            gestureLock = .rotation
-            delegate?.gestureEngineDidBeginGesture(self)
 
         case .ended, .cancelled:
-            if gestureLock == .rotation { gestureLock = .none }
-            delegate?.gestureEngineDidEndGesture(self)
+            let wasRotating = gestureLock == .rotation || (gestureLock == .none && sentRotationBegan)
+            gestureLock       = .none
+            sentRotationBegan = false
+            sentPinchBegan    = false
+            if wasRotating { delegate?.gestureEngineDidEndGesture(self) }
+            return
 
         default:
-            // In-flight rotation event — check if pinch already won
             if gestureLock == .pinch { return }
-            // Still deciding? accumulate rotation signal
-            if event.timestamp - decidingStart < decisionWindowSecs {
-                pendingRotationDeg += abs(degrees)
-                // Check dominance: if rotation already dominates, commit early
-                if pendingRotationDeg / rotNorm > pendingMagAbs / magNorm + 0.3 {
+            pendingRotationDeg += abs(degrees)
+            if gestureLock == .none {
+                let elapsed  = event.timestamp - decidingStart
+                let rotScore = pendingRotationDeg / rotNorm
+                let magScore = pendingMagAbs      / magNorm
+                let rotReady = pendingRotationDeg >= rotMinThreshold
+                if rotReady && (rotScore >= magScore || elapsed >= decisionWindowSecs) {
                     gestureLock = .rotation
+                } else if elapsed >= decisionWindowSecs {
+                    if magScore > rotScore {
+                        gestureLock = .pinch   // pinch wins
+                        return
+                    } else {
+                        gestureLock = .rotation
+                    }
+                } else {
+                    return  // still deciding
                 }
             }
+        }
+
+        // Send .began once when rotation is first committed
+        if !sentRotationBegan {
+            sentRotationBegan = true
+            delegate?.gestureEngineDidBeginGesture(self)
         }
 
         guard degrees != 0 else { return }
@@ -343,49 +371,54 @@ public final class GestureEngine {
 
         let mag = Double(event.magnification)
 
-        // --- Gesture mutex + decision window ---
+        // --- Symmetric decision window (pinch) ---
         switch event.phase {
         case .began:
-            if gestureLock == .rotation { return }  // rotation already won — ignore pinch
+            if gestureLock == .rotation { return }  // rotation already committed
             if gestureLock == .none {
-                decidingStart  = event.timestamp
-                pendingMagAbs  = abs(mag)
+                decidingStart      = event.timestamp
+                pendingMagAbs      = abs(mag)
                 pendingRotationDeg = 0
             }
-            // Don't commit the lock yet — wait for dominance or window expiry
-            delegate?.gestureEngineDidBeginPinch(self)
 
         case .ended, .cancelled:
-            if gestureLock == .pinch { gestureLock = .none }
-            delegate?.gestureEngineDidEndPinch(self)
+            let wasPinching = gestureLock == .pinch || (gestureLock == .none && sentPinchBegan)
+            gestureLock       = .none
+            sentRotationBegan = false
+            sentPinchBegan    = false
+            if wasPinching { delegate?.gestureEngineDidEndPinch(self) }
             return
 
         default:
-            if gestureLock == .rotation { return }  // rotation won — suppress pinch
+            if gestureLock == .rotation { return }
             pendingMagAbs += abs(mag)
 
-            // Decision window: choose dominant gesture
             if gestureLock == .none {
-                let elapsed = event.timestamp - decidingStart
+                let elapsed  = event.timestamp - decidingStart
                 let rotScore = pendingRotationDeg / rotNorm
                 let magScore = pendingMagAbs      / magNorm
-
-                if elapsed >= decisionWindowSecs || abs(rotScore - magScore) > 0.3 {
-                    // Window expired or one clearly dominates
-                    if rotScore > magScore {
+                let magReady = pendingMagAbs >= pinchMinThreshold
+                if magReady && (magScore > rotScore || elapsed >= decisionWindowSecs) {
+                    gestureLock = .pinch
+                } else if elapsed >= decisionWindowSecs {
+                    if rotScore >= magScore {
                         gestureLock = .rotation
-                        return  // rotation won — suppress this pinch event
+                        return
                     } else {
                         gestureLock = .pinch
                     }
                 } else {
-                    // Still deciding — suppress pinch for now (conservatively)
-                    return
+                    return  // still deciding
                 }
             }
 
-            // Minimum threshold: don't act until enough magnification accumulated
             guard pendingMagAbs >= pinchMinThreshold else { return }
+        }
+
+        // Send .began once when pinch is first committed
+        if !sentPinchBegan {
+            sentPinchBegan = true
+            delegate?.gestureEngineDidBeginPinch(self)
         }
 
         guard mag != 0 else { return }
@@ -400,6 +433,7 @@ public final class GestureEngine {
             phase: event.phase
         ))
     }
+
 
     // Frontmost app cache — NSWorkspace.frontmostApplication is an XPC call.
     // Calling it 50+ times/sec during rotation creates a backlog of objects.
