@@ -53,10 +53,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
         setupStatusItem()
 
-        // On first launch after an update, reset stale TCC entry so the user
-        // only needs to flip the toggle — no confusing "already checked but broken" state.
-        handlePostUpdateTCCReset()
-
         if !PermissionsManager.hasAccessibilityPermission() {
             showOnboarding()
         } else {
@@ -240,23 +236,4 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Post-update TCC reset
-
-    /// Detects first launch after a binary change via modification date (not SHA256)
-    /// and resets the stale TCC entry so the user only needs to flip the toggle.
-    private func handlePostUpdateTCCReset() {
-        guard let executableURL = Bundle.main.executableURL else { return }
-
-        // Use file modification date — fast, no binary read, no SHA256
-        let mtime = (try? FileManager.default.attributesOfItem(atPath: executableURL.path))?[.modificationDate] as? Date
-        let currentKey = mtime.map { String(Int($0.timeIntervalSince1970)) } ?? ""
-        let lastKey = UserDefaults.standard.string(forKey: "LastLaunchedBinaryMtime") ?? ""
-
-        if currentKey != lastKey {
-            PermissionsManager.resetAccessibilityTrust()
-            if !currentKey.isEmpty {
-                UserDefaults.standard.set(currentKey, forKey: "LastLaunchedBinaryMtime")
-            }
-        }
-    }
 }
