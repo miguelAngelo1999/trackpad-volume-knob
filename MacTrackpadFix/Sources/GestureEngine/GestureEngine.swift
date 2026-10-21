@@ -98,8 +98,6 @@ public final class GestureEngine {
     private let pinchMinThreshold: Double = 0.015  // min pinch mag before acting
     private let rotMinThreshold:   Double = 3.0    // min rotation degrees before committing
     // Track whether we already sent .began to the delegate for each type
-    private var sentRotationBegan: Bool = false
-    private var sentPinchBegan:    Bool = false
 
     public init(settings: AppSettings, interpreter: GestureInterpreter) {
         self.settings = settings
@@ -174,8 +172,6 @@ public final class GestureEngine {
         gestureLock = .none
         pendingRotationDeg = 0
         pendingMagAbs = 0
-        sentRotationBegan = false
-        sentPinchBegan = false
         cachedFrontmostID = nil
         cachedFrontmostTime = 0
     }
@@ -297,56 +293,35 @@ public final class GestureEngine {
 
         let degrees = Double(event.rotation)
 
-        // Gesture disambiguation — events flow immediately, no dead zone.
-        // gestureEngineDidBeginGesture is deferred to the first event that
-        // actually flows through (not .began), so the interpreter's
-        // activeGesture is never set incorrectly from an early .began call.
+        // --- Gesture mutex + decision window (restored from a06cfba) ---
+        // Rotation commits immediately on .began — this was the working approach.
+        // Pinch must accumulate enough signal to override it.
         switch event.phase {
         case .began:
-            if gestureLock == .pinch { return }
             if gestureLock == .none {
                 decidingStart      = event.timestamp
                 pendingRotationDeg = abs(degrees)
                 pendingMagAbs      = 0
             }
-            // Do NOT call begin here — defer to first event that flows through
+            if gestureLock == .pinch { return }   // pinch won — ignore rotation
+            gestureLock = .rotation
+            delegate?.gestureEngineDidBeginGesture(self)
 
         case .ended, .cancelled:
-            if sentRotationBegan { delegate?.gestureEngineDidEndGesture(self) }
-            gestureLock       = .none
-            sentRotationBegan = false
-            sentPinchBegan    = false
-            return
+            if gestureLock == .rotation { gestureLock = .none }
+            delegate?.gestureEngineDidEndGesture(self)
 
         default:
             if gestureLock == .pinch { return }
-            pendingRotationDeg += abs(degrees)
-            if gestureLock == .none {
-                let elapsed  = event.timestamp - decidingStart
-                let rotScore = pendingRotationDeg / rotNorm
-                let magScore = pendingMagAbs      / magNorm
-                // Only suppress rotation if pinch is MASSIVELY stronger (3x).
-                // A tiny pinch component from natural finger movement should not
-                // block rotation — only a genuine pinch gesture should.
-                if magScore > rotScore * 3.0 && elapsed >= decisionWindowSecs {
-                    gestureLock = .pinch
-                    return
-                }
-                if elapsed >= decisionWindowSecs || rotScore > magScore + 0.2 {
+            if event.timestamp - decidingStart < decisionWindowSecs {
+                pendingRotationDeg += abs(degrees)
+                if pendingRotationDeg / rotNorm > pendingMagAbs / magNorm + 0.3 {
                     gestureLock = .rotation
                 }
             }
-            // Rotation events always flow through during the window unless
-            // pinch has definitively committed its lock above.
         }
 
         guard degrees != 0 else { return }
-
-        // Send begin on first rotation event that actually flows through
-        if !sentRotationBegan {
-            sentRotationBegan = true
-            delegate?.gestureEngineDidBeginGesture(self)
-        }
 
         if settings.debugLogging {
             Logger.debug("GestureEngine: rotation \(String(format: "%.3f", degrees))° phase=\(event.phase.rawValue)")
@@ -367,21 +342,20 @@ public final class GestureEngine {
 
         let mag = Double(event.magnification)
 
+        // --- Gesture mutex + decision window ---
         switch event.phase {
         case .began:
-            if gestureLock == .rotation { return }
+            if gestureLock == .rotation { return }  // rotation already won
             if gestureLock == .none {
                 decidingStart      = event.timestamp
                 pendingMagAbs      = abs(mag)
                 pendingRotationDeg = 0
             }
-            // Do NOT call begin here — defer to first event that flows through
+            delegate?.gestureEngineDidBeginPinch(self)
 
         case .ended, .cancelled:
-            if sentPinchBegan { delegate?.gestureEngineDidEndPinch(self) }
-            gestureLock       = .none
-            sentRotationBegan = false
-            sentPinchBegan    = false
+            if gestureLock == .pinch { gestureLock = .none }
+            delegate?.gestureEngineDidEndPinch(self)
             return
 
         default:
@@ -391,27 +365,21 @@ public final class GestureEngine {
                 let elapsed  = event.timestamp - decidingStart
                 let rotScore = pendingRotationDeg / rotNorm
                 let magScore = pendingMagAbs      / magNorm
-                if rotScore > magScore {
-                    if elapsed >= decisionWindowSecs { gestureLock = .rotation }
-                    return
-                }
-                if pendingMagAbs >= pinchMinThreshold &&
-                   (elapsed >= decisionWindowSecs || magScore > rotScore + 0.3) {
-                    gestureLock = .pinch
-                } else if pendingMagAbs < pinchMinThreshold {
-                    return
+                if elapsed >= decisionWindowSecs || abs(rotScore - magScore) > 0.3 {
+                    if rotScore > magScore {
+                        gestureLock = .rotation
+                        return
+                    } else {
+                        gestureLock = .pinch
+                    }
+                } else {
+                    return  // still deciding — suppress pinch
                 }
             }
             guard pendingMagAbs >= pinchMinThreshold else { return }
         }
 
         guard mag != 0 else { return }
-
-        // Send begin on first pinch event that actually flows through
-        if !sentPinchBegan {
-            sentPinchBegan = true
-            delegate?.gestureEngineDidBeginPinch(self)
-        }
 
         if settings.debugLogging {
             Logger.debug("GestureEngine: pinch \(String(format: "%.4f", mag)) phase=\(event.phase.rawValue)")
